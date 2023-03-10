@@ -6,7 +6,6 @@ import (
 	"hoyobar/handler"
 	"hoyobar/model"
 	"hoyobar/service"
-	"hoyobar/storage"
 	"log"
 	"os"
 
@@ -36,13 +35,13 @@ func initApp(config conf.Config) {
     r := gin.Default()
     api := r.Group("/api")
     db := initDB(config)
+    model.Init(db)
     var (
         userHandler handler.Handler
     )
 
     // user API
-    userStorage := storage.UserStorage{DB: db}
-    userService := service.UserService{UserStorage: &userStorage}    
+    userService := service.UserService{}    
     userHandler = &handler.UserHandler{UserService: &userService} // must be pointer, why?
     userHandler.AddRoute(api.Group("/user"))
     
