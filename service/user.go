@@ -65,6 +65,16 @@ func (u *UserService) GenAuthToken(userID int64) string {
     return token 
 }
 
+func (u *UserService) AuthTokenToUserID(authToken string) (userID int64, err error) {
+    u.authToken2UserID.mu.RLock()
+    defer u.authToken2UserID.mu.RUnlock()
+    userID, ok := u.authToken2UserID.data[authToken]
+    if !ok {
+        return 0, fmt.Errorf("auth token not found")
+    }
+    return userID, nil
+}
+
 func (u *UserService) FetchInfoByUsername(username string) (*UserBasic, error) {
     return nil, nil
 }

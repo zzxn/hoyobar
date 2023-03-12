@@ -4,12 +4,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Auth() gin.HandlerFunc {
+func ReadAuthToken(callback func(authToken string, c *gin.Context)) gin.HandlerFunc {
    return func(c *gin.Context) {
        authToken := c.GetHeader("Auth")
        if authToken == "" {
            return
        }
-       c.Set("auth_token", authToken)
+       callback(authToken, c)
    }
 }
