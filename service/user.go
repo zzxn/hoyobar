@@ -4,15 +4,24 @@ import (
 	"database/sql"
 	"fmt"
 	"hoyobar/model"
+	"hoyobar/util/idgen"
+	"strconv"
+	"sync"
 )
 
 
-type UserService struct {}
+type UserService struct {
+    authToken2UserID struct {
+        data map[string]int64
+        mu sync.RWMutex
+    }
+}
 
 type UserBasic struct {
     UserID int64
     Phone string
     Email string
+    Nickname string
     Password string
 }
 
@@ -43,13 +52,23 @@ func (u *UserService) Register(username string, password string, vcode string) (
         UserID: userModel.UserID, 
         Phone: userModel.Phone.String, 
         Password: userModel.Password,
+        Nickname: userModel.Nickname,
     }, nil 
 }
 
-func (U *UserService) FetchInfoByUsername(username string) (*UserBasic, error) {
+func (u *UserService) GenAuthToken(userID int64) string {
+    // TODO: store auth token into redis
+    token := strconv.FormatInt(idgen.New(), 10)
+    u.authToken2UserID.mu.Lock()
+    defer u.authToken2UserID.mu.Unlock()
+    u.authToken2UserID.data[token] = userID
+    return token 
+}
+
+func (u *UserService) FetchInfoByUsername(username string) (*UserBasic, error) {
     return nil, nil
 }
 
-func (U *UserService) FetchInfoByUserID(userID string) (*UserBasic, error) {
+func (u *UserService) FetchInfoByUserID(userID string) (*UserBasic, error) {
     return nil, nil
 }

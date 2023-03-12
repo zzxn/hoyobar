@@ -22,10 +22,9 @@ func (u *UserHandler) AddRoute(r *gin.RouterGroup) {
 
 func (u *UserHandler) Hello(c *gin.Context) {
     req := UserHelloReq{}
-    if err := c.ShouldBindJSON(&req); err != nil {
-        c.AbortWithStatusJSON(http.StatusBadRequest, fmt.Sprintf("failed to parse request body: %v", err))
+    if failBindJSON(c, &req) {
         return
-    } 
+    }
 
     c.JSON(http.StatusOK, fmt.Sprintf("Got your message: %q", req.Msg)) 
 }
@@ -36,8 +35,7 @@ func (u *UserHandler) VerifyAccount(c *gin.Context) {
 
 func (u *UserHandler) Register(c *gin.Context) {
     req := UserRegisterReq{}
-    if err := c.ShouldBindJSON(&req); err != nil {
-        c.AbortWithStatusJSON(http.StatusBadRequest, fmt.Sprintf("failed to parse request body: %v", err))
+    if failBindJSON(c, &req) {
         return
     }
     userBasic, err := u.UserService.Register(req.Username, req.Password, req.Vcode)  
@@ -45,7 +43,13 @@ func (u *UserHandler) Register(c *gin.Context) {
         c.JSON(http.StatusOK, fmt.Sprintf("err: %v", err))
         return
     }
-    c.JSON(http.StatusOK, userBasic)
+    authToken := u.UserService.GenAuthToken(userBasic.UserID)
+    c.JSON(http.StatusOK, gin.H{
+        "auth_token": authToken,
+        "nickname": userBasic.Nickname,
+        "user_id": userBasic.UserID,
+    })
+    return
 }
 
 func (u *UserHandler) Login(c *gin.Context) {

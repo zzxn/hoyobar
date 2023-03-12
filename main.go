@@ -6,6 +6,8 @@ import (
 	"hoyobar/handler"
 	"hoyobar/model"
 	"hoyobar/service"
+	"hoyobar/util/idgen"
+	"hoyobar/util/middleware"
 	"log"
 	"os"
 
@@ -32,10 +34,14 @@ func readConfig() conf.Config {
 }
 
 func initApp(config conf.Config) {
-    r := gin.Default()
-    api := r.Group("/api")
+    idgen.Init("1970-01-01", 0)
     db := initDB(config)
     model.Init(db)
+
+    r := gin.Default()
+    api := r.Group("/api")
+    api.Use(middleware.Auth())
+
     var (
         userHandler handler.Handler
     )
