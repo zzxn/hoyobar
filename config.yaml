@@ -4,3 +4,5 @@ db:
   user: admin
   pass: password
   db_name: db_name
+app:
+  auth_token_expire: 30s

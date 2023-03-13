@@ -7,11 +7,9 @@ import (
 )
 
 type PostHandler struct {
-   PostService *service.PostService 
+	PostService *service.PostService
 }
 
 func (p *PostHandler) AddRoute(r *gin.RouterGroup) {
 
 }
-
-

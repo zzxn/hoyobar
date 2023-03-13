@@ -3,82 +3,157 @@ package service
 import (
 	"database/sql"
 	"fmt"
+	"hoyobar/conf"
 	"hoyobar/model"
+	"hoyobar/util/crypt"
 	"hoyobar/util/idgen"
-	"strconv"
-	"sync"
+	"hoyobar/util/mycache"
+	"hoyobar/util/myerr"
+	"log"
+	"strings"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-
 type UserService struct {
-    authToken2UserID struct {
-        data map[string]int64
-        mu sync.RWMutex
-    }
+	cache mycache.Cache
+}
+
+func NewUserService(cache mycache.Cache) *UserService {
+	if conf.Global == nil {
+		log.Fatalf("conf.Global is not initialized")
+	}
+	userService := &UserService{
+		cache: cache,
+	}
+	return userService
 }
 
 type UserBasic struct {
-    UserID int64
-    Phone string
-    Email string
-    Nickname string
-    Password string
+	UserID    int64 `json:"user_id,string"`
+	Phone     string
+	Email     string
+	Nickname  string
+	AuthToken string
 }
 
 func (u *UserService) Verify(account string) (bool, error) {
-    return false, nil
+	return false, nil
 }
 
 func (u *UserService) Register(username string, password string, vcode string) (*UserBasic, error) {
-    var err error
-    var userID int64 = 11111
-    userModel := model.User{
-        UserID: userID,
-        Phone: sql.NullString{String: username, Valid: true},
-        Password: password,
-        Nickname: "zzxn",
-    }
-    err = model.DB.Create(&userModel).Error
-    if err != nil {
-        return nil, fmt.Errorf("fail to create user: %v", err)
-    }
+	var err error
 
-    userModel = model.User{}
-    err = model.DB.Where("user_id = ?", userID).First(&userModel).Error
-    if err != nil {
-        return nil, fmt.Errorf("fail to find user after creation: %v", err)
-    }
-    return &UserBasic{
-        UserID: userModel.UserID, 
-        Phone: userModel.Phone.String, 
-        Password: userModel.Password,
-        Nickname: userModel.Nickname,
-    }, nil 
+	// TODO fixme: here we assume username is phone
+	userExist, err := u.ExistByUsername(username)
+	if err != nil {
+		return nil, err
+	}
+	if userExist {
+		return nil, myerr.ErrDuplicateUser
+	}
+
+	var userID int64 = idgen.New()
+	passhash, err := crypt.HashPassword(password)
+	if err != nil {
+		return nil, myerr.NewOtherErr(err, "fail to hash password")
+	}
+	userModel := model.User{
+		UserID:   userID,
+		Phone:    sql.NullString{String: username, Valid: true},
+		Password: passhash,
+		Nickname: "zzxn",
+	}
+	err = model.DB.Create(&userModel).Error
+	if err != nil {
+		return nil, myerr.NewOtherErr(err, "fail to create user %q", username)
+	}
+
+	userModel = model.User{}
+	err = model.DB.Where("user_id = ?", userID).First(&userModel).Error
+	if err != nil {
+		return nil, myerr.NewOtherErr(err, "fail to find user %q after creation", username)
+	}
+
+	authToken := u.GenAndStoreAuthToken(userID)
+	return &UserBasic{
+		UserID:    userModel.UserID,
+		Phone:     userModel.Phone.String,
+		Nickname:  userModel.Nickname,
+		AuthToken: authToken,
+	}, nil
 }
 
-func (u *UserService) GenAuthToken(userID int64) string {
-    // TODO: store auth token into redis
-    token := strconv.FormatInt(idgen.New(), 10)
-    u.authToken2UserID.mu.Lock()
-    defer u.authToken2UserID.mu.Unlock()
-    u.authToken2UserID.data[token] = userID
-    return token 
+func authTokenToCacheKey(authToken string) string {
+	return "(auth_token)" + authToken
 }
 
+func (u *UserService) GenAndStoreAuthToken(userID int64) string {
+	// TODO: store auth token into redis
+	token := strings.ReplaceAll(uuid.NewString(), "-", "")
+	u.cache.Set(authTokenToCacheKey(token), userID, conf.Global.App.AuthTokenExpire)
+	return token
+}
+
+// convert auth token to user ID, also refresh cache
 func (u *UserService) AuthTokenToUserID(authToken string) (userID int64, err error) {
-    u.authToken2UserID.mu.RLock()
-    defer u.authToken2UserID.mu.RUnlock()
-    userID, ok := u.authToken2UserID.data[authToken]
-    if !ok {
-        return 0, fmt.Errorf("auth token not found")
-    }
-    return userID, nil
+	key := authTokenToCacheKey(authToken)
+
+	// get user ID from cache
+	value, err := u.cache.Get(key)
+	if err != nil {
+		return 0, myerr.NewOtherErr(err, "fail to query auth token cache key %q", key)
+	}
+	if value == nil {
+		return 0, myerr.ErrNotLogin
+	}
+	userID, ok := value.(int64)
+	if !ok {
+		return 0, myerr.ErrOther.Wrap(fmt.Errorf("type of auth token cache value expect int64, got %T", value))
+	}
+
+	// update cache to avoid expiration, ignore error
+	_ = u.cache.Set(key, userID, conf.Global.App.AuthTokenExpire)
+	return userID, nil
 }
 
-func (u *UserService) FetchInfoByUsername(username string) (*UserBasic, error) {
-    return nil, nil
+func (u *UserService) Login(username, password string) (*UserBasic, error) {
+	var err error
+	userModel := model.User{}
+	err = model.DB.Where("phone = ?", username).First(&userModel).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, myerr.ErrUserNotFound
+	}
+	if err != nil {
+		return nil, myerr.NewOtherErr(err, "fail to find user")
+	}
+	if false == crypt.CompareHashAndPassword(userModel.Password, password) {
+		return nil, myerr.ErrWrongPassword
+	}
+	authToken := u.GenAndStoreAuthToken(userModel.UserID)
+	return &UserBasic{
+		UserID:    userModel.UserID,
+		Phone:     userModel.Phone.String,
+		Nickname:  userModel.Nickname,
+		AuthToken: authToken,
+	}, nil
 }
 
-func (u *UserService) FetchInfoByUserID(userID string) (*UserBasic, error) {
-    return nil, nil
+func (u *UserService) ExistByUsername(username string) (bool, error) {
+	var count int64
+	// TODO: fix here, check it's phone or email
+	err := model.DB.Model(&model.User{}).Where("phone = ?", username).Count(&count).Error
+	if err != nil {
+		return true, myerr.NewOtherErr(err, "fail to check user existence")
+	}
+	return count > 0, nil
 }
+
+// func (u *UserService) FetchInfoByUsername(username string) (*UserBasic, error) {
+//     return nil, nil
+// }
+
+// func (u *UserService) FetchInfoByUserID(userID string) (*UserBasic, error) {
+//     return nil, nil
+// }
