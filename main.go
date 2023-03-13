@@ -56,11 +56,11 @@ func startApp(config conf.Config) {
 	api.Use(middleware.ReadAuthToken(func(authToken string, c *gin.Context) {
 		userID, err := userService.AuthTokenToUserID(authToken)
 		if err != nil {
-            if e, ok := err.(*myerr.MyError); ok {
-                log.Println("fails to read user ID from auth token, cause:", e.Cause())
-            } else {
-                log.Println("fails to read user ID from auth token, err:", err)
-            }
+			if e, ok := err.(*myerr.MyError); ok {
+				log.Println("fails to read user ID from auth token, cause:", e.Cause())
+			} else {
+				log.Println("fails to read user ID from auth token, err:", err)
+			}
 			c.Set("auth_err", err)
 			return
 		}
