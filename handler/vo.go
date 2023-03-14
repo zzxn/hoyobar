@@ -14,7 +14,7 @@ func failBindJSON(c *gin.Context, req interface{}) bool {
 	// bind req
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(myerr.ErrBadReqBody.Wrap(err))
-        return true
+		return true
 	}
 
 	// validate req
@@ -28,12 +28,12 @@ func failBindJSON(c *gin.Context, req interface{}) bool {
 }
 
 type AccountVerifyReq struct {
-    Username string `validate:"required"`
+	Username string `validate:"required"`
 }
 
 type UserRegisterReq struct {
 	Username string `validate:"required"`
-    Nickname string `validate:"required,min=3,max=20"`
+	Nickname string `validate:"required,min=3,max=20"`
 	Password string `validate:"required"`
 	Vcode    string `validate:"required"`
 }
@@ -41,4 +41,10 @@ type UserRegisterReq struct {
 type UserLoginReq struct {
 	Username string `validate:"required"`
 	Password string `validate:"required"`
+}
+
+type PostCreateReq struct {
+	AuthorID int64  `json:"author_id,string" validate:"required"`
+	Title    string `validate:"required"`
+	Content  string `validate:"required"`
 }

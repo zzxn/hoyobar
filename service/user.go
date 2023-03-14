@@ -31,46 +31,46 @@ func NewUserService(cache mycache.Cache) *UserService {
 }
 
 type UserBasic struct {
-	UserID    int64 `json:"user_id,string"`
-	Phone     string
-	Email     string
-	Nickname  string
-	AuthToken string
+	UserID    int64  `json:"user_id,string"`
+	Phone     string `json:"phone"`
+	Email     string `json:"email"`
+	Nickname  string `json:"nickname"`
+	AuthToken string `json:"auth_token"`
 }
 
 type RegisterInfo struct {
-    Username string
-    Password string
-    Vcode string
-    Nickname string
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Vcode    string `json:"vcode"`
+	Nickname string `json:"nickname"`
 }
 
 // send verification code to email/phone represented by username
 func (u *UserService) Verify(username string) error {
-    // TODO: 
+	// TODO:
 	return nil
 }
 
 // check if username and verification code is matched
 func (u *UserService) checkVcode(username string, vcode string) (bool, error) {
-    return true, nil
+	return true, nil
 }
 
 func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 	var err error
-    username, rawPass := args.Username, args.Password
+	username, rawPass := args.Username, args.Password
 
-    if !crypt.CheckPasswordStrength(rawPass) {
-        return nil, myerr.ErrWeakPassword
-    }
+	if !crypt.CheckPasswordStrength(rawPass) {
+		return nil, myerr.ErrWeakPassword
+	}
 
-    vcodeOK, err := u.checkVcode(username, args.Vcode)
-    if err != nil {
-        return nil, err
-    }
-    if !vcodeOK {
-        return nil, myerr.ErrWrongVcode
-    }
+	vcodeOK, err := u.checkVcode(username, args.Vcode)
+	if err != nil {
+		return nil, err
+	}
+	if !vcodeOK {
+		return nil, myerr.ErrWrongVcode
+	}
 
 	// TODO fixme: here we assume username is phone
 	userExist, err := u.ExistByUsername(username)
@@ -79,7 +79,7 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 	}
 	if userExist {
 		return nil, myerr.ErrDupUser
-    }
+	}
 
 	var userID int64 = idgen.New()
 	passhash, err := crypt.HashPassword(rawPass)
@@ -97,11 +97,11 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 		return nil, myerr.NewOtherErr(err, "fail to create user %q", username)
 	}
 
-	userModel = model.User{}
-	err = model.DB.Where("user_id = ?", userID).First(&userModel).Error
-	if err != nil {
-		return nil, myerr.NewOtherErr(err, "fail to find user %q after creation", username)
-	}
+	// userModel = model.User{}
+	// err = model.DB.Where("user_id = ?", userID).First(&userModel).Error
+	// if err != nil {
+	// 	return nil, myerr.NewOtherErr(err, "fail to find user %q after creation", username)
+	// }
 
 	authToken := u.GenAndStoreAuthToken(userID)
 	return &UserBasic{

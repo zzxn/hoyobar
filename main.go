@@ -49,6 +49,7 @@ func startApp(config conf.Config) {
 
 	var (
 		userHandler handler.Handler
+		postHandler handler.Handler
 	)
 
 	// user API
@@ -69,6 +70,11 @@ func startApp(config conf.Config) {
 	userHandler = &handler.UserHandler{UserService: userService} // must be pointer, why?
 	userHandler.AddRoute(api.Group("/user"))
 
+	// post API
+	postService := service.NewPostService(cache)
+	postHandler = &handler.PostHandler{PostService: postService}
+	postHandler.AddRoute(api.Group("/post"))
+
 	r.Run(fmt.Sprintf(":%v", config.App.Port))
 }
 
@@ -77,7 +83,6 @@ func initSqlite3(config conf.Config) *gorm.DB {
 	if err != nil {
 		log.Fatalf("fails to connect sqlite db: %v\n", err)
 	}
-	db.Debug().AutoMigrate(&model.User{})
 	return db
 }
 
@@ -95,14 +100,17 @@ func initMySQL(config conf.Config) *gorm.DB {
 
 func initDB(config conf.Config) *gorm.DB {
 	log.Printf("connect db with type %v \n", config.DB.Type)
-
+	var db *gorm.DB
 	switch config.DB.Type {
 	case "mysql":
-		return initMySQL(config)
+		db = initMySQL(config)
 	case "sqlite3":
-		return initSqlite3(config)
+		db = initSqlite3(config)
 	}
-
-	log.Fatalln("not recoginize db type:", config.DB.Type)
-	return nil // impossible
+	if db == nil {
+		log.Fatalln("not recoginize db type:", config.DB.Type)
+	}
+	// TODO: do we need to do this?
+	db.Debug().AutoMigrate(&model.User{}, &model.Post{}, &model.PostStat{})
+	return db
 }

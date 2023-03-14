@@ -15,13 +15,13 @@ func ErrorHandler() gin.HandlerFunc {
 			err := e.Err
 			if myErr, ok := err.(*myerr.MyError); ok {
 				log.Printf("error: %v, cause: %v\n", myErr, myErr.Cause())
-				c.JSON(http.StatusOK, gin.H{
+				c.JSON(http.StatusInternalServerError, gin.H{
 					"ecode": myErr.Ecode,
 					"emsg":  myErr.Emsg,
 				})
 			} else {
 				log.Println("Unknown error:", e)
-				c.JSON(http.StatusOK, gin.H{
+				c.JSON(http.StatusInternalServerError, gin.H{
 					"ecode": myerr.ErrUnknown.Ecode,
 					"emsg":  myerr.ErrUnknown.Emsg,
 				})

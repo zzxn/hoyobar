@@ -16,5 +16,8 @@ type Model struct {
 }
 
 func Init(db *gorm.DB) {
+	if db == nil {
+		panic("db is nil")
+	}
 	DB = db
 }
