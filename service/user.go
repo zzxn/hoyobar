@@ -45,14 +45,18 @@ func (u *UserService) Verify(account string) (bool, error) {
 func (u *UserService) Register(username string, password string, vcode string) (*UserBasic, error) {
 	var err error
 
+    if !crypt.CheckPasswordStrength(password) {
+        return nil, myerr.ErrWeakPassword
+    }
+
 	// TODO fixme: here we assume username is phone
 	userExist, err := u.ExistByUsername(username)
 	if err != nil {
 		return nil, err
 	}
 	if userExist {
-		return nil, myerr.ErrDuplicateUser
-	}
+		return nil, myerr.ErrDupUser
+    }
 
 	var userID int64 = idgen.New()
 	passhash, err := crypt.HashPassword(password)

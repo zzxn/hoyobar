@@ -27,8 +27,13 @@ func failBindJSON(c *gin.Context, req interface{}) bool {
 	return false
 }
 
+type AccountVerifyReq struct {
+    Username string `validate:"required"`
+}
+
 type UserRegisterReq struct {
 	Username string `validate:"required"`
+    Nickname string `validate:"required,min=3,max=20"`
 	Password string `validate:"required"`
 	Vcode    string `validate:"required"`
 }
