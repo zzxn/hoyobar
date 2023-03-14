@@ -31,7 +31,19 @@ func (u *UserHandler) CheckOnline(c *gin.Context) {
 }
 
 func (u *UserHandler) VerifyAccount(c *gin.Context) {
-	//TODO
+    req := &AccountVerifyReq{}
+    if failBindJSON(c, req) {
+        return
+    }
+
+    if err := u.UserService.Verify(req.Username); err != nil {
+        c.Error(err)
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "ecode": "0",
+        "emsg": "已成功发送验证码到邮箱/手机",
+    })
 }
 
 func (u *UserHandler) Register(c *gin.Context) {
@@ -39,7 +51,14 @@ func (u *UserHandler) Register(c *gin.Context) {
 	if failBindJSON(c, req) {
 		return
 	}
-	userBasic, err := u.UserService.Register(req.Username, req.Password, req.Vcode)
+
+	userBasic, err := u.UserService.Register(&service.RegisterInfo{
+        Username: req.Username,
+        Password: req.Password,
+        Nickname: req.Nickname,
+        Vcode: req.Vcode,
+    })
+
 	if err != nil {
 		c.Error(err)
 		return

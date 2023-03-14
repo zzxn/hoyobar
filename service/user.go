@@ -38,15 +38,38 @@ type UserBasic struct {
 	AuthToken string
 }
 
-func (u *UserService) Verify(account string) (bool, error) {
-	return false, nil
+type RegisterInfo struct {
+    Username string
+    Password string
+    Vcode string
+    Nickname string
 }
 
-func (u *UserService) Register(username string, password string, vcode string) (*UserBasic, error) {
-	var err error
+// send verification code to email/phone represented by username
+func (u *UserService) Verify(username string) error {
+    // TODO: 
+	return nil
+}
 
-    if !crypt.CheckPasswordStrength(password) {
+// check if username and verification code is matched
+func (u *UserService) checkVcode(username string, vcode string) (bool, error) {
+    return true, nil
+}
+
+func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
+	var err error
+    username, rawPass := args.Username, args.Password
+
+    if !crypt.CheckPasswordStrength(rawPass) {
         return nil, myerr.ErrWeakPassword
+    }
+
+    vcodeOK, err := u.checkVcode(username, args.Vcode)
+    if err != nil {
+        return nil, err
+    }
+    if !vcodeOK {
+        return nil, myerr.ErrWrongVcode
     }
 
 	// TODO fixme: here we assume username is phone
@@ -59,7 +82,7 @@ func (u *UserService) Register(username string, password string, vcode string) (
     }
 
 	var userID int64 = idgen.New()
-	passhash, err := crypt.HashPassword(password)
+	passhash, err := crypt.HashPassword(rawPass)
 	if err != nil {
 		return nil, myerr.NewOtherErr(err, "fail to hash password")
 	}
@@ -67,7 +90,7 @@ func (u *UserService) Register(username string, password string, vcode string) (
 		UserID:   userID,
 		Phone:    sql.NullString{String: username, Valid: true},
 		Password: passhash,
-		Nickname: "zzxn",
+		Nickname: args.Nickname,
 	}
 	err = model.DB.Create(&userModel).Error
 	if err != nil {
@@ -144,6 +167,7 @@ func (u *UserService) Login(username, password string) (*UserBasic, error) {
 	}, nil
 }
 
+// check if username (email/phone) exist in system.
 func (u *UserService) ExistByUsername(username string) (bool, error) {
 	var count int64
 	// TODO: fix here, check it's phone or email
