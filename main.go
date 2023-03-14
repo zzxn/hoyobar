@@ -69,11 +69,11 @@ func startApp(config conf.Config) {
 	userHandler = &handler.UserHandler{UserService: userService} // must be pointer, why?
 	userHandler.AddRoute(api.Group("/user"))
 
-	r.Run(":8080")
+	r.Run(fmt.Sprintf(":%v", config.App.Port))
 }
 
-func initTestDB() *gorm.DB {
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+func initSqlite3(config conf.Config) *gorm.DB {
+	db, err := gorm.Open(sqlite.Open(config.DB.Sqlite3.DSN), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("fails to connect sqlite db: %v\n", err)
 	}
@@ -81,18 +81,28 @@ func initTestDB() *gorm.DB {
 	return db
 }
 
-func initDB(config conf.Config) *gorm.DB {
-	log.Println("connect db...")
-	if true {
-		// use test config
-		return initTestDB()
-	}
+func initMySQL(config conf.Config) *gorm.DB {
 	var err error
+	c := config.DB.MySQL
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		config.DB.User, config.DB.Pass, config.DB.Host, config.DB.Port, config.DB.DBName)
+		c.User, c.Pass, c.Host, c.Port, c.Host)
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("fails to connect database %q, err=%v\n", dsn, err)
 	}
 	return db
+}
+
+func initDB(config conf.Config) *gorm.DB {
+	log.Printf("connect db with type %v \n", config.DB.Type)
+
+	switch config.DB.Type {
+	case "mysql":
+		return initMySQL(config)
+	case "sqlite3":
+		return initSqlite3(config)
+	}
+
+	log.Fatalln("not recoginize db type:", config.DB.Type)
+	return nil // impossible
 }

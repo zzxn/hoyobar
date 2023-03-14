@@ -14,14 +14,23 @@ var Global *Config
 
 type Config struct {
 	DB struct {
-		Host   string `yaml:"host"`
-		Port   string `yaml:"port"`
-		User   string `yaml:"user"`
-		Pass   string `yaml:"pass"`
-		DBName string `yaml:"db_name"`
+		Type string `yaml:"type"`
+
+		MySQL struct {
+			Host   string `yaml:"host"`
+			Port   string `yaml:"port"`
+			User   string `yaml:"user"`
+			Pass   string `yaml:"pass"`
+			DBName string `yaml:"db_name"`
+		} `yaml:"mysql"`
+
+		Sqlite3 struct {
+			DSN string `yaml:"dsn"`
+		} `yaml:"sqlite3"`
 	} `yaml:"db"`
 
 	App struct {
+		Port            string        `yaml:"port"`
 		AuthTokenExpire time.Duration `yaml:"auth_token_expire"`
 	} `yaml:"app"`
 }
