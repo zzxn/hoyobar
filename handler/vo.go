@@ -13,15 +13,15 @@ var validator *vlid.Validate = vlid.New() // thread-safe
 func failBindJSON(c *gin.Context, req interface{}) bool {
 	// bind req
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(myerr.ErrFailBindJSON.Wrap(err))
-		return true
+		c.Error(myerr.ErrBadReqBody.Wrap(err))
+        return true
 	}
 
 	// validate req
 	fmt.Printf("req: %#v\n", req)
 	err := validator.Struct(req)
 	if err != nil {
-		c.Error(myerr.ErrFailBindJSON.Wrap(err))
+		c.Error(myerr.ErrBadReqBody.Wrap(err))
 		return true
 	}
 	return false
