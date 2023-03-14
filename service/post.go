@@ -75,14 +75,14 @@ func (p *PostService) Create(authorID int64, title string, content string) (post
 			return errors.Wrap(err, "fail to create post")
 		}
 
-		// err = tx.Create(&model.PostStat{
-		// 	PostID:    postID,
-		// 	ReplyTime: time.Now(),
-		// 	ReplyNum:  0,
-		// }).Error
-		// if err != nil {
-		// 	return errors.Wrap(err, "fail to create post_stat")
-		// }
+		err = tx.Create(&model.PostStat{
+			PostID:    postID,
+			ReplyTime: time.Now(),
+			ReplyNum:  0,
+		}).Error
+		if err != nil {
+			return errors.Wrap(err, "fail to create post_stat")
+		}
 		return nil
 	})
 	if err != nil {
