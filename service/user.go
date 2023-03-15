@@ -10,7 +10,6 @@ import (
 	"hoyobar/util/mycache"
 	"hoyobar/util/myerr"
 	"hoyobar/util/regexes"
-	"log"
 	"strings"
 
 	"github.com/google/uuid"
@@ -18,17 +17,12 @@ import (
 )
 
 type UserService struct {
-	cache      mycache.Cache
-	userShardN int
+	cache mycache.Cache
 }
 
 func NewUserService(cache mycache.Cache) *UserService {
-	if conf.Global == nil {
-		log.Fatalf("conf.Global is not initialized")
-	}
 	userService := &UserService{
-		cache:      cache,
-		userShardN: conf.Global.Sharding.UserShardN,
+		cache: cache,
 	}
 	return userService
 }
