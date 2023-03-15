@@ -124,7 +124,7 @@ func (p *PostService) Reply(authorID int64, postID int64, content string) (err e
 	return
 }
 
-func (p *PostService) ReplyList(postID int64, cursor string) (list *ReplyList, err error) {
+func (p *PostService) ListReply(postID int64, cursor string) (list *ReplyList, err error) {
 	return
 }
 

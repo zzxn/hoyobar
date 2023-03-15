@@ -1,5 +1,6 @@
 db:
   type: sqlite3
+  auto_migrate: true
   sqlite3:
     dsn: "file::memory:?cache=shared"
   mysql:
@@ -8,6 +9,10 @@ db:
     user: admin
     pass: password
     db_name: db_name
+sharding:
+  user_shard_n: 2
+  user_phone_shard_n: 2
+  user_email_shard_n: 2
 app:
   port: 8080
   auth_token_expire: 30m

@@ -9,6 +9,7 @@ import (
 	"hoyobar/util/idgen"
 	"hoyobar/util/mycache"
 	"hoyobar/util/myerr"
+	"hoyobar/util/regexes"
 	"log"
 	"strings"
 
@@ -17,7 +18,8 @@ import (
 )
 
 type UserService struct {
-	cache mycache.Cache
+	cache      mycache.Cache
+	userShardN int
 }
 
 func NewUserService(cache mycache.Cache) *UserService {
@@ -25,7 +27,8 @@ func NewUserService(cache mycache.Cache) *UserService {
 		log.Fatalf("conf.Global is not initialized")
 	}
 	userService := &UserService{
-		cache: cache,
+		cache:      cache,
+		userShardN: conf.Global.Sharding.UserShardN,
 	}
 	return userService
 }
@@ -60,8 +63,12 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 	var err error
 	username, rawPass := args.Username, args.Password
 
-	if !crypt.CheckPasswordStrength(rawPass) {
+	if !regexes.Password.MatchString(rawPass) {
 		return nil, myerr.ErrWeakPassword
+	}
+	passhash, err := crypt.HashPassword(rawPass)
+	if err != nil {
+		return nil, myerr.NewOtherErr(err, "fail to hash password")
 	}
 
 	vcodeOK, err := u.checkVcode(username, args.Vcode)
@@ -72,27 +79,38 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 		return nil, myerr.ErrWrongVcode
 	}
 
-	// TODO fixme: here we assume username is phone
-	userExist, err := u.ExistByUsername(username)
+	existUserID, err := u.UsernameToUserID(username)
 	if err != nil {
 		return nil, err
 	}
-	if userExist {
+	if existUserID != 0 {
 		return nil, myerr.ErrDupUser
 	}
 
 	var userID int64 = idgen.New()
-	passhash, err := crypt.HashPassword(rawPass)
+	err = u.createUsername(username, userID)
 	if err != nil {
-		return nil, myerr.NewOtherErr(err, "fail to hash password")
+		return nil, err
+	}
+
+	usernameField, err := model.UsernameField(username)
+	if err != nil {
+		return nil, myerr.NewOtherErr(err, "%v not a valid username", username)
 	}
 	userModel := model.User{
 		UserID:   userID,
-		Phone:    sql.NullString{String: username, Valid: true},
 		Password: passhash,
 		Nickname: args.Nickname,
 	}
-	err = model.DB.Create(&userModel).Error
+	if usernameField == "phone" {
+		userModel.Phone = sql.NullString{String: username, Valid: true}
+	} else if usernameField == "email" {
+		userModel.Email = sql.NullString{String: username, Valid: true}
+	} else {
+		return nil, myerr.NewOtherErr(err, "username %v is not supported", username)
+	}
+
+	err = model.DB.Scopes(model.TableOfUser(&userModel, userID)).Create(&userModel).Error
 	if err != nil {
 		return nil, myerr.NewOtherErr(err, "fail to create user %q", username)
 	}
@@ -148,7 +166,18 @@ func (u *UserService) AuthTokenToUserID(authToken string) (userID int64, err err
 func (u *UserService) Login(username, password string) (*UserBasic, error) {
 	var err error
 	userModel := model.User{}
-	err = model.DB.Where("phone = ?", username).First(&userModel).Error
+
+	// TODO: query user id
+	userID, err := u.UsernameToUserID(username)
+	if err != nil {
+		return nil, myerr.NewOtherErr(err, "fails to query username %v", username)
+	}
+	if userID == 0 {
+		return nil, myerr.ErrUserNotFound
+	}
+
+	err = model.DB.Scopes(model.TableOfUser(&userModel, userID)).
+		Where("user_id = ?", userID).First(&userModel).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, myerr.ErrUserNotFound
 	}
@@ -167,15 +196,62 @@ func (u *UserService) Login(username, password string) (*UserBasic, error) {
 	}, nil
 }
 
-// check if username (email/phone) exist in system.
-func (u *UserService) ExistByUsername(username string) (bool, error) {
-	var count int64
-	// TODO: fix here, check it's phone or email
-	err := model.DB.Model(&model.User{}).Where("phone = ?", username).Count(&count).Error
+// transform username to user ID.
+// attenion: if username not exist, return 0, nil
+func (u *UserService) UsernameToUserID(username string) (int64, error) {
+	var userID int64
+	var err error
+
+	usernameField, err := model.UsernameField(username)
 	if err != nil {
-		return true, myerr.NewOtherErr(err, "fail to check user existence")
+		return 0, myerr.NewOtherErr(err, "%v not a valid username", username)
 	}
-	return count > 0, nil
+
+	if usernameField == "phone" {
+		userPhoneM := model.UserPhone{}
+		err = model.DB.Scopes(model.TableOfUserPhone(&userPhoneM, username)).
+			Where("phone = ?", username).First(&userPhoneM).Error
+		userID = userPhoneM.UserID
+	} else if usernameField == "email" {
+		userEmailM := model.UserEmail{}
+		err = model.DB.Scopes(model.TableOfUserEmail(&userEmailM, username)).
+			Where("email = ?", username).First(&userEmailM).Error
+		userID = userEmailM.UserID
+	} else {
+		return 0, myerr.NewOtherErr(fmt.Errorf(""), "not support username typed %v", usernameField)
+	}
+
+	if err == gorm.ErrRecordNotFound {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, myerr.NewOtherErr(err, "fail to check user existence")
+	}
+	return userID, nil
+}
+
+func (u *UserService) createUsername(username string, userID int64) error {
+	var err error
+
+	usernameField, err := model.UsernameField(username)
+	if err != nil {
+		return myerr.NewOtherErr(err, "%v not a valid username", username)
+	}
+
+	if usernameField == "phone" {
+		err = model.DB.Scopes(model.TableOfUserPhone(&model.UserPhone{}, username)).
+			Create(&model.UserPhone{Phone: username, UserID: userID}).Error
+	} else if usernameField == "email" {
+		err = model.DB.Scopes(model.TableOfUserEmail(&model.UserEmail{}, username)).
+			Create(&model.UserEmail{Email: username, UserID: userID}).Error
+	} else {
+		return myerr.NewOtherErr(fmt.Errorf(""), "not support username typed %v", usernameField)
+	}
+
+	if err != nil {
+		return myerr.NewOtherErr(err, "fail to create username")
+	}
+	return nil
 }
 
 // func (u *UserService) FetchInfoByUsername(username string) (*UserBasic, error) {

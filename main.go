@@ -110,7 +110,5 @@ func initDB(config conf.Config) *gorm.DB {
 	if db == nil {
 		log.Fatalln("not recoginize db type:", config.DB.Type)
 	}
-	// TODO: do we need to do this?
-	db.Debug().AutoMigrate(&model.User{}, &model.Post{}, &model.PostStat{})
 	return db
 }

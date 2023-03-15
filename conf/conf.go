@@ -27,7 +27,15 @@ type Config struct {
 		Sqlite3 struct {
 			DSN string `yaml:"dsn"`
 		} `yaml:"sqlite3"`
+
+		AutoMigrate bool `yaml:"auto_migrate"`
 	} `yaml:"db"`
+
+	Sharding struct {
+		UserShardN      int `yaml:"user_shard_n"`
+		UserPhoneShardN int `yaml:"user_phone_shard_n"`
+		UserEmailShardN int `yaml:"user_email_shard_n"`
+	} `yaml:"sharding"`
 
 	App struct {
 		Port            string        `yaml:"port"`
