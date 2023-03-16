@@ -62,7 +62,7 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 	}
 	passhash, err := crypt.HashPassword(rawPass)
 	if err != nil {
-		return nil, myerr.NewOtherErr(err, "fail to hash password")
+		return nil, myerr.OtherErrWarpf(err, "fail to hash password")
 	}
 
 	vcodeOK, err := u.checkVcode(username, args.Vcode)
@@ -89,7 +89,8 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 
 	usernameField, err := model.UsernameField(username)
 	if err != nil {
-		return nil, myerr.NewOtherErr(err, "%v not a valid username", username)
+		return nil, myerr.OtherErrWarpf(err, "%v not a valid username", username).
+			WithEmsg("账号不是合法的邮箱或11位手机号")
 	}
 	userModel := model.User{
 		UserID:   userID,
@@ -101,24 +102,20 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 	} else if usernameField == "email" {
 		userModel.Email = sql.NullString{String: username, Valid: true}
 	} else {
-		return nil, myerr.NewOtherErr(err, "username %v is not supported", username)
+		return nil, myerr.ErrOther.WithEmsg("不支持的账号类型")
 	}
 
 	err = model.DB.Scopes(model.TableOfUser(&userModel, userID)).Create(&userModel).Error
 	if err != nil {
-		return nil, myerr.NewOtherErr(err, "fail to create user %q", username)
+		return nil, myerr.OtherErrWarpf(err, "fail to create user %q", username).
+			WithEmsg("注册异常，请联系管理员")
 	}
-
-	// userModel = model.User{}
-	// err = model.DB.Where("user_id = ?", userID).First(&userModel).Error
-	// if err != nil {
-	// 	return nil, myerr.NewOtherErr(err, "fail to find user %q after creation", username)
-	// }
 
 	authToken := u.GenAndStoreAuthToken(userID)
 	return &UserBasic{
 		UserID:    userModel.UserID,
 		Phone:     userModel.Phone.String,
+		Email:     userModel.Email.String,
 		Nickname:  userModel.Nickname,
 		AuthToken: authToken,
 	}, nil
@@ -142,14 +139,14 @@ func (u *UserService) AuthTokenToUserID(authToken string) (userID int64, err err
 	// get user ID from cache
 	value, err := u.cache.Get(key)
 	if err != nil {
-		return 0, myerr.NewOtherErr(err, "fail to query auth token cache key %q", key)
+		return 0, myerr.OtherErrWarpf(err, "fail to query auth token cache key %q", key)
 	}
 	if value == nil {
 		return 0, myerr.ErrNotLogin
 	}
 	userID, ok := value.(int64)
 	if !ok {
-		return 0, myerr.ErrOther.Wrap(fmt.Errorf("type of auth token cache value expect int64, got %T", value))
+		return 0, myerr.ErrOther.WithCause(fmt.Errorf("type of auth token cache value expect int64, got %T", value))
 	}
 
 	// update cache to avoid expiration, ignore error
@@ -164,7 +161,7 @@ func (u *UserService) Login(username, password string) (*UserBasic, error) {
 	// TODO: query user id
 	userID, err := u.UsernameToUserID(username)
 	if err != nil {
-		return nil, myerr.NewOtherErr(err, "fails to query username %v", username)
+		return nil, myerr.OtherErrWarpf(err, "fails to query username %v", username)
 	}
 	if userID == 0 {
 		return nil, myerr.ErrUserNotFound
@@ -173,10 +170,10 @@ func (u *UserService) Login(username, password string) (*UserBasic, error) {
 	err = model.DB.Scopes(model.TableOfUser(&userModel, userID)).
 		Where("user_id = ?", userID).First(&userModel).Error
 	if err == gorm.ErrRecordNotFound {
-		return nil, myerr.ErrUserNotFound
+		return nil, myerr.ErrUserNotFound.WithEmsg("用户数据异常，请联系客服")
 	}
 	if err != nil {
-		return nil, myerr.NewOtherErr(err, "fail to find user")
+		return nil, myerr.OtherErrWarpf(err, "fail to find user")
 	}
 	if false == crypt.CompareHashAndPassword(userModel.Password, password) {
 		return nil, myerr.ErrWrongPassword
@@ -198,7 +195,8 @@ func (u *UserService) UsernameToUserID(username string) (int64, error) {
 
 	usernameField, err := model.UsernameField(username)
 	if err != nil {
-		return 0, myerr.NewOtherErr(err, "%v not a valid username", username)
+		return 0, myerr.OtherErrWarpf(err, "%v not a valid username", username).
+			WithEmsg("账号不是合法的邮箱或手机号")
 	}
 
 	if usernameField == "phone" {
@@ -212,14 +210,15 @@ func (u *UserService) UsernameToUserID(username string) (int64, error) {
 			Where("email = ?", username).First(&userEmailM).Error
 		userID = userEmailM.UserID
 	} else {
-		return 0, myerr.NewOtherErr(fmt.Errorf(""), "not support username typed %v", usernameField)
+		return 0, myerr.OtherErrWarpf(fmt.Errorf(""), "not support username typed %v", usernameField).
+			WithEmsg("不支持的账户类型")
 	}
 
 	if err == gorm.ErrRecordNotFound {
 		return 0, nil
 	}
 	if err != nil {
-		return 0, myerr.NewOtherErr(err, "fail to check user existence")
+		return 0, myerr.OtherErrWarpf(err, "fail to check user existence")
 	}
 	return userID, nil
 }
@@ -229,7 +228,7 @@ func (u *UserService) createUsername(username string, userID int64) error {
 
 	usernameField, err := model.UsernameField(username)
 	if err != nil {
-		return myerr.NewOtherErr(err, "%v not a valid username", username)
+		return myerr.OtherErrWarpf(err, "%v not a valid username", username)
 	}
 
 	if usernameField == "phone" {
@@ -239,11 +238,12 @@ func (u *UserService) createUsername(username string, userID int64) error {
 		err = model.DB.Scopes(model.TableOfUserEmail(&model.UserEmail{}, username)).
 			Create(&model.UserEmail{Email: username, UserID: userID}).Error
 	} else {
-		return myerr.NewOtherErr(fmt.Errorf(""), "not support username typed %v", usernameField)
+		return myerr.OtherErrWarpf(fmt.Errorf(""), "not support username typed %v", usernameField).
+			WithEmsg("不支持的账户类型")
 	}
 
 	if err != nil {
-		return myerr.NewOtherErr(err, "fail to create username")
+		return myerr.OtherErrWarpf(err, "fail to create username")
 	}
 	return nil
 }

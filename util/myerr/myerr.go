@@ -16,9 +16,10 @@ type MyError struct {
 var (
 	ErrUnknown = newError("-1", "未知错误") // unrecognized error by biz logic
 
-	ErrBadReqBody   = newError("2001", "请求格式错误")
-	ErrWeakPassword = newError("2002", "密码需要包含[数字]/[英文]/[其他字符]中的两种及以上，长度6-20")
+	ErrBadReqBody   = newError("2000", "请求格式错误")
+	ErrWeakPassword = newError("2001", "密码需要包含[数字]/[英文]/[其他字符]中的两种及以上，长度6-20")
 
+	ErrAuth          = newError("3000", "权限/认证错误")
 	ErrWrongPassword = newError("3001", "用户名或密码错误")
 	ErrNotLogin      = newError("3002", "未登录")
 	ErrWrongVcode    = newError("3003", "验证码错误")
@@ -37,15 +38,27 @@ func (e *MyError) Cause() error {
 	return e.cause
 }
 
-func NewOtherErr(cause error, msg string, args ...interface{}) *MyError {
-	return ErrOther.Wrap(errors.Wrapf(cause, msg, args))
+// wrap a cause error with ErrOther.
+// imsg is for inner message print.
+func OtherErrWarpf(cause error, imsg string, args ...interface{}) *MyError {
+	return ErrOther.WithCause(errors.Wrapf(cause, imsg, args))
 }
 
-func (e *MyError) Wrap(cause error) *MyError {
+func (e *MyError) WithCause(cause error) *MyError {
 	return &MyError{
 		Ecode: e.Ecode,
 		Emsg:  e.Emsg,
 		cause: cause,
+	}
+}
+
+// return a new same-type of *MyError with new emsg.
+// emsg is for user.
+func (e *MyError) WithEmsg(emsg string) *MyError {
+	return &MyError{
+		Ecode: e.Ecode,
+		Emsg:  emsg,
+		cause: e.cause,
 	}
 }
 

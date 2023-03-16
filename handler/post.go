@@ -36,7 +36,7 @@ func (p *PostHandler) Create(c *gin.Context) {
 func (p *PostHandler) Detail(c *gin.Context) {
 	postID, err := strconv.ParseInt(c.Query("post_id"), 10, 64)
 	if err != nil {
-		c.Error(myerr.ErrBadReqBody)
+		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的帖子ID"))
 		return
 	}
 	detail, err := p.PostService.Detail(postID)
@@ -52,7 +52,7 @@ func (p *PostHandler) List(c *gin.Context) {
 	cursor := c.Query("cursor")
 	authorID, err := strconv.ParseInt(c.Query("author_id"), 10, 64)
 	if err != nil {
-		c.Error(myerr.ErrBadReqBody)
+		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的作者ID"))
 		return
 	}
 	list, err := p.PostService.List(order, cursor, authorID)

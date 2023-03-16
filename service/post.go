@@ -86,7 +86,7 @@ func (p *PostService) Create(authorID int64, title string, content string) (post
 		return nil
 	})
 	if err != nil {
-		return 0, myerr.NewOtherErr(err, "fail to create post data")
+		return 0, myerr.OtherErrWarpf(err, "fail to create post data")
 	}
 	return postID, nil
 }
@@ -95,15 +95,15 @@ func (p *PostService) Detail(postID int64) (detail *PostDetail, err error) {
 	postM, postStatM := model.Post{}, model.PostStat{}
 	err = model.DB.Model(&model.Post{}).Where("post_id = ?", postID).First(&postM).Error
 	if err == gorm.ErrRecordNotFound {
-		return nil, myerr.ErrResourceNotFound
+		return nil, myerr.ErrResourceNotFound.WithEmsg("帖子不存在")
 	}
 	if err != nil {
-		return nil, myerr.NewOtherErr(err, "fail to queyr post %v", postID)
+		return nil, myerr.OtherErrWarpf(err, "fail to query post %v", postID)
 	}
 	// TODO: use cache here
 	err = model.DB.Model(&model.PostStat{}).Where("post_id = ?", &postStatM).Error
 	if err != nil {
-		return nil, myerr.NewOtherErr(err, "fail to queyr post_stat %v", postID)
+		return nil, myerr.OtherErrWarpf(err, "fail to queyr post_stat %v", postID)
 	}
 	return &PostDetail{
 		PostID:    postID,
