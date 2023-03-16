@@ -10,6 +10,11 @@ import (
 
 var DB *gorm.DB
 
+// Base type for model.
+// time.Time should be parsed into:
+// - mysql: DATETIME(3), see: https://github.com/go-gorm/mysql/blob/master/mysql.go#L401
+// - sqlite: DATETIME. As sqlite has not seperate datetime type, it will be stored as string or interger.
+// The pricision is determined by the gorm. (not sure about it, anyway it's not important, we just use it to debug)
 type Model struct {
 	ID        uint64         `gorm:"primarykey"`
 	CreatedAt time.Time      `gorm:"index"`
