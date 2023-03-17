@@ -32,6 +32,7 @@ func readConfig() conf.Config {
 	}
 	config := conf.FromYAML(r)
 	conf.Global = &config
+	fmt.Printf("config: %#v", config)
 	return config
 }
 
@@ -90,7 +91,7 @@ func initMySQL(config conf.Config) *gorm.DB {
 	var err error
 	c := config.DB.MySQL
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		c.User, c.Pass, c.Host, c.Port, c.Host)
+		c.User, c.Pass, c.Host, c.Port, c.DBName)
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("fails to connect database %q, err=%v\n", dsn, err)

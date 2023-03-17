@@ -1,18 +1,18 @@
 db:
-  type: sqlite3
+  type: mysql
   auto_migrate: true
   sqlite3:
     dsn: "file::memory:?cache=shared"
   mysql:
     host: localhost
     port: 3306
-    user: admin
+    user: root
     pass: password
-    db_name: db_name
+    db_name: hoyobar_test
 sharding:
   user_shard_n: 2
   user_phone_shard_n: 2
   user_email_shard_n: 2
 app:
   port: 8080
-  auth_token_expire: 30m
+  auth_token_expire: 10h

@@ -10,7 +10,7 @@ import (
 
 type UserPhone struct {
 	Model
-	Phone  string `gorm:"uniqueIndex"`
+	Phone  string `gorm:"uniqueIndex;size:30"`
 	UserID int64  `gorm:"uniqueIndex"`
 }
 

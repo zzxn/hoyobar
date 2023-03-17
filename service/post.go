@@ -8,11 +8,11 @@ import (
 	"hoyobar/util/mycache"
 	"hoyobar/util/myerr"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"gorm.io/gorm"
 )
 
@@ -31,13 +31,13 @@ func NewPostService(cache mycache.Cache) *PostService {
 }
 
 type PostDetail struct {
-	PostID    int64     `json:"post_id,string"`
-	AuthorID  int64     `json:"author_id"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	CreateAt  time.Time `json:"create_at"`
-	ReplyTime time.Time `json:"reply_time"`
-	ReplyNum  int64     `json:"reply_num"`
+	PostID      int64     `json:"post_id,string"`
+	AuthorID    int64     `json:"author_id,string"`
+	Title       string    `json:"title"`
+	Content     string    `json:"content"`
+	CreatedTime time.Time `json:"created_at"`
+	ReplyTime   time.Time `json:"reply_time"`
+	ReplyNum    int64     `json:"reply_num"`
 }
 
 type PostList struct {
@@ -47,44 +47,26 @@ type PostList struct {
 
 type ReplyList struct {
 	List []struct {
-		ReplyID  int64     `json:"reply_id"`
-		AuthorID string    `json:"author_id"`
-		Content  string    `json:"content"`
-		CreateAt time.Time `json:"create_at"`
+		ReplyID   int64     `json:"reply_id,string"`
+		AuthorID  string    `json:"author_id,string"`
+		Content   string    `json:"content"`
+		CreatedAt time.Time `json:"created_at"`
 	}
 	Cursor string
 }
-
-const (
-	PostListOrderLatestReply = "lastest_reply"
-	PostListOrderLatestPost  = "lastest_post"
-)
 
 func (p *PostService) Create(authorID int64, title string, content string) (postID int64, err error) {
 	// TODO: check authentication and authority
 	postID = idgen.New()
 	postM := model.Post{
-		PostID:   postID,
-		AuthorID: authorID,
-		Title:    title,
-		Content:  content,
+		PostID:    postID,
+		AuthorID:  authorID,
+		Title:     title,
+		Content:   content,
+		ReplyTime: time.Now(),
+		ReplyNum:  0,
 	}
-	err = model.DB.Transaction(func(tx *gorm.DB) (err error) {
-		err = tx.Create(&postM).Error
-		if err != nil {
-			return errors.Wrap(err, "fail to create post")
-		}
-
-		err = tx.Create(&model.PostStat{
-			PostID:    postID,
-			ReplyTime: time.Now(),
-			ReplyNum:  0,
-		}).Error
-		if err != nil {
-			return errors.Wrap(err, "fail to create post_stat")
-		}
-		return nil
-	})
+	err = model.DB.Create(&postM).Error
 	if err != nil {
 		return 0, myerr.OtherErrWarpf(err, "fail to create post data")
 	}
@@ -92,7 +74,7 @@ func (p *PostService) Create(authorID int64, title string, content string) (post
 }
 
 func (p *PostService) Detail(postID int64) (detail *PostDetail, err error) {
-	postM, postStatM := model.Post{}, model.PostStat{}
+	postM := model.Post{}
 	err = model.DB.Model(&model.Post{}).Where("post_id = ?", postID).First(&postM).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, myerr.ErrResourceNotFound.WithEmsg("帖子不存在")
@@ -100,24 +82,74 @@ func (p *PostService) Detail(postID int64) (detail *PostDetail, err error) {
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to query post %v", postID)
 	}
-	// TODO: use cache here
-	err = model.DB.Model(&model.PostStat{}).Where("post_id = ?", &postStatM).Error
-	if err != nil {
-		return nil, myerr.OtherErrWarpf(err, "fail to queyr post_stat %v", postID)
-	}
 	return &PostDetail{
-		PostID:    postID,
-		AuthorID:  postM.AuthorID,
-		Title:     postM.Title,
-		Content:   postM.Content,
-		CreateAt:  postM.CreatedAt,
-		ReplyTime: postStatM.ReplyTime,
-		ReplyNum:  postStatM.ReplyNum,
+		PostID:      postID,
+		AuthorID:    postM.AuthorID,
+		Title:       postM.Title,
+		Content:     postM.Content,
+		CreatedTime: postM.CreatedAt,
+		ReplyTime:   postM.ReplyTime,
+		ReplyNum:    postM.ReplyNum,
 	}, nil
 }
 
-func (p *PostService) List(order string, cursor string, authorID int64) (list *PostList, err error) {
-	return
+// order: one of "create_time" and "reply_time", desc order
+// cursor: the cursor returned by last call with the same params
+func (p *PostService) List(order string, cursor string) (list *PostList, err error) {
+	lastID, lastTime, err := decomposePageCursor(cursor)
+	if err != nil {
+		return nil, myerr.ErrBadReqBody.WithEmsg("页游标错误")
+	}
+	// TODO: sort according to reply time
+	var orderField string
+	switch order {
+	case "create_time":
+		orderField = "created_at"
+	case "reply_time":
+		orderField = "reply_time"
+	default:
+		return nil, myerr.ErrBadReqBody.WithEmsg("不支持的排序方式")
+	}
+
+	var posts []model.Post
+	err = model.DB.Model(&model.Post{}).
+		Where(fmt.Sprintf("%v <= ?", orderField), lastTime).
+		Where("post_id < ?", lastID).
+		Order(fmt.Sprintf("%v DESC", orderField)).
+		Order("post_id DESC").
+		Limit(5).
+		Find(&posts).Error
+	if err != nil {
+		return nil, myerr.OtherErrWarpf(err, "fail to query post")
+	}
+	if len(posts) == 0 {
+		return nil, myerr.ErrNoMoreEntry
+	}
+
+	n := len(posts)
+	var newCursor string
+	switch order {
+	case "create_time":
+		newCursor = composePageCursor(posts[n-1].PostID, posts[n-1].CreatedAt)
+	case "reply_time":
+		newCursor = composePageCursor(posts[n-1].PostID, posts[n-1].ReplyTime)
+	default:
+		return nil, myerr.ErrBadReqBody.WithEmsg("不支持的排序方式-2")
+	}
+
+	list = &PostList{Cursor: newCursor}
+	for _, post := range posts {
+		list.List = append(list.List, PostDetail{
+			PostID:      post.PostID,
+			AuthorID:    post.AuthorID,
+			Title:       post.Title,
+			Content:     post.Content,
+			CreatedTime: post.CreatedAt,
+			ReplyTime:   post.ReplyTime,
+			ReplyNum:    post.ReplyNum,
+		})
+	}
+	return list, nil
 }
 
 func (p *PostService) Reply(authorID int64, postID int64, content string) (err error) {
@@ -128,8 +160,12 @@ func (p *PostService) ListReply(postID int64, cursor string) (list *ReplyList, e
 	return
 }
 
-// TODO: 确保时间区域的精度足够
+var pageCursorTimeFormat = time.RFC3339Nano
+
 func decomposePageCursor(cursor string) (ID int64, t time.Time, err error) {
+	if cursor == "" {
+		return math.MaxInt64, time.Now(), nil
+	}
 	segs := strings.SplitN(cursor, "|", 2)
 	if len(segs) != 2 {
 		return ID, t, fmt.Errorf("Wrong page cursor format: %v", cursor)
@@ -140,11 +176,11 @@ func decomposePageCursor(cursor string) (ID int64, t time.Time, err error) {
 		return ID, t, fmt.Errorf("wrong page cursor format, expect first part a int, got %v", segs[0])
 	}
 
-	t, err = time.Parse(time.StampNano, segs[1])
+	t, err = time.Parse(pageCursorTimeFormat, segs[1])
 	if err != nil {
 		return ID, t, fmt.Errorf(
 			"wrong page cursor format, expect second part time formatted, %v, got %v",
-			time.StampNano,
+			pageCursorTimeFormat,
 			segs[1],
 		)
 	}
@@ -153,5 +189,5 @@ func decomposePageCursor(cursor string) (ID int64, t time.Time, err error) {
 }
 
 func composePageCursor(ID int64, t time.Time) (cursor string) {
-	return fmt.Sprintf("%d|%v", ID, t.Format(time.StampNano))
+	return fmt.Sprintf("%d|%v", ID, t.Format(pageCursorTimeFormat))
 }

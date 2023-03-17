@@ -40,7 +40,6 @@ func migrate(db *gorm.DB) {
 	var err error
 	err = db.Debug().AutoMigrate(
 		&Post{},
-		&PostStat{},
 		&PostReply{},
 	)
 	if err != nil {

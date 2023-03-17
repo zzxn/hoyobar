@@ -13,8 +13,8 @@ import (
 type User struct {
 	Model
 	UserID   int64          `gorm:"uniqueIndex"`
-	Email    sql.NullString `gorm:"uniqueIndex"`
-	Phone    sql.NullString `gorm:"uniqueIndex"`
+	Email    sql.NullString `gorm:"size:320"`
+	Phone    sql.NullString `gorm:"size:30"`
 	Nickname string
 	Password string
 }

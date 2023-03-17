@@ -65,6 +65,7 @@ func (u *UserHandler) Register(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"auth_token": userBasic.AuthToken,
+		"username":   req.Username,
 		"nickname":   userBasic.Nickname,
 		"user_id":    strconv.FormatInt(userBasic.UserID, 10),
 	})
@@ -83,6 +84,7 @@ func (u *UserHandler) Login(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"auth_token": userBasic.AuthToken,
+		"username":   req.Username,
 		"nickname":   userBasic.Nickname,
 		"user_id":    strconv.FormatInt(userBasic.UserID, 10),
 	})

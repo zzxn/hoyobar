@@ -10,7 +10,7 @@ import (
 
 type UserEmail struct {
 	Model
-	Email  string `gorm:"uniqueIndex"`
+	Email  string `gorm:"uniqueIndex;size:320"`
 	UserID int64  `gorm:"uniqueIndex"`
 }
 

@@ -9,25 +9,26 @@ type MyError struct {
 }
 
 // -1: 未知错误
-// 2xxx：请求/参数格式错误
-// 3xxx：权限/认证错误
-// 4xxx: 其他错误
+// 1xxx：请求/参数格式错误
+// 2xxx：权限/认证错误
+// 3xxx: 其他错误
 
 var (
 	ErrUnknown = newError("-1", "未知错误") // unrecognized error by biz logic
 
-	ErrBadReqBody   = newError("2000", "请求格式错误")
-	ErrWeakPassword = newError("2001", "密码需要包含[数字]/[英文]/[其他字符]中的两种及以上，长度6-20")
+	ErrBadReqBody   = newError("1000", "请求格式错误")
+	ErrWeakPassword = newError("1001", "密码需要包含[数字]/[英文]/[其他字符]中的两种及以上，长度6-20")
 
-	ErrAuth          = newError("3000", "权限/认证错误")
-	ErrWrongPassword = newError("3001", "用户名或密码错误")
-	ErrNotLogin      = newError("3002", "未登录")
-	ErrWrongVcode    = newError("3003", "验证码错误")
+	ErrAuth          = newError("2000", "权限/认证错误")
+	ErrWrongPassword = newError("2001", "用户名或密码错误")
+	ErrNotLogin      = newError("2002", "未登录")
+	ErrWrongVcode    = newError("2003", "验证码错误")
 
-	ErrOther            = newError("4000", "服务器内部错误") // 通用的其他错误
-	ErrDupUser          = newError("4001", "该用户已存在")
-	ErrUserNotFound     = newError("4002", "该用户不存在")
-	ErrResourceNotFound = newError("4003", "该资源不存在")
+	ErrOther            = newError("3000", "服务器内部错误") // 通用的其他错误
+	ErrDupUser          = newError("3001", "该用户已存在")
+	ErrUserNotFound     = newError("3002", "该用户不存在")
+	ErrResourceNotFound = newError("3003", "该资源不存在")
+	ErrNoMoreEntry      = newError("3004", "没有更多数据了")
 )
 
 func (e *MyError) Error() string {
