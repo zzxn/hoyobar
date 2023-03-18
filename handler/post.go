@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"hoyobar/conf"
 	"hoyobar/service"
 	"hoyobar/util/myerr"
 	"net/http"
@@ -49,9 +50,20 @@ func (p *PostHandler) Detail(c *gin.Context) {
 }
 
 func (p *PostHandler) List(c *gin.Context) {
+	var err error
 	order := c.Query("order")
+	if order == "" {
+		order = "create_time"
+	}
 	cursor := c.Query("cursor")
-	list, err := p.PostService.List(order, cursor)
+	pageSizeStr := c.Query("page_size")
+	var pageSize int
+	if pageSizeStr == "" {
+		pageSize = conf.Global.App.DefaultPageSize
+	} else if pageSize, err = strconv.Atoi(pageSizeStr); err != nil {
+		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的页大小"))
+	}
+	list, err := p.PostService.List(order, cursor, pageSize)
 	if err != nil {
 		c.Error(err)
 		return

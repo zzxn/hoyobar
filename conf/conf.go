@@ -40,6 +40,8 @@ type Config struct {
 	App struct {
 		Port            string        `yaml:"port"`
 		AuthTokenExpire time.Duration `yaml:"auth_token_expire"`
+		DefaultPageSize int           `yaml:"default_page_size"`
+		MaxPageSize     int           `yaml:"max_page_size"`
 	} `yaml:"app"`
 }
 

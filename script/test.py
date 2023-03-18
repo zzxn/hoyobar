@@ -7,9 +7,9 @@ import requests
 import tqdm
 
 PREFIX='http://localhost:8080/api'
-CONCURRENT=1 # set it to 1 if using sqlite3
-N_USER = 999
-N_POST_PER_USER = 8
+CONCURRENT=100 # set it to 1 if using sqlite3
+N_USER = 97
+N_POST_PER_USER = 3
 
 
 def get(url: str, params, token=None):

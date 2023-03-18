@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hoyobar/conf"
 	"hoyobar/model"
+	"hoyobar/util/funcs"
 	"hoyobar/util/idgen"
 	"hoyobar/util/mycache"
 	"hoyobar/util/myerr"
@@ -95,7 +96,11 @@ func (p *PostService) Detail(postID int64) (detail *PostDetail, err error) {
 
 // order: one of "create_time" and "reply_time", desc order
 // cursor: the cursor returned by last call with the same params
-func (p *PostService) List(order string, cursor string) (list *PostList, err error) {
+func (p *PostService) List(order string, cursor string, pageSize int) (list *PostList, err error) {
+	if pageSize <= 0 {
+		return nil, myerr.ErrBadReqBody.WithEmsg("页为空")
+	}
+	pageSize = funcs.Min(pageSize, conf.Global.App.MaxPageSize)
 	lastID, lastTime, err := decomposePageCursor(cursor)
 	if err != nil {
 		return nil, myerr.ErrBadReqBody.WithEmsg("页游标错误")
@@ -166,7 +171,7 @@ func decomposePageCursor(cursor string) (ID int64, t time.Time, err error) {
 	if cursor == "" {
 		return math.MaxInt64, time.Now(), nil
 	}
-	segs := strings.SplitN(cursor, "|", 2)
+	segs := strings.SplitN(strings.ReplaceAll(cursor, "P", "+"), "_", 2)
 	if len(segs) != 2 {
 		return ID, t, fmt.Errorf("Wrong page cursor format: %v", cursor)
 	}
@@ -189,5 +194,7 @@ func decomposePageCursor(cursor string) (ID int64, t time.Time, err error) {
 }
 
 func composePageCursor(ID int64, t time.Time) (cursor string) {
-	return fmt.Sprintf("%d|%v", ID, t.Format(pageCursorTimeFormat))
+	cursor = fmt.Sprintf("%d_%v", ID, t.Format(pageCursorTimeFormat))
+	cursor = strings.ReplaceAll(cursor, "+", "P") // make it url safe
+	return cursor
 }

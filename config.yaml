@@ -10,9 +10,11 @@ db:
     pass: password
     db_name: hoyobar_test
 sharding:
-  user_shard_n: 2
-  user_phone_shard_n: 2
-  user_email_shard_n: 2
+  user_shard_n: 8
+  user_phone_shard_n: 8
+  user_email_shard_n: 8
 app:
   port: 8080
   auth_token_expire: 10h
+  default_page_size: 20
+  max_page_size: 20
