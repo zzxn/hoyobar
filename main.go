@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
@@ -37,7 +38,7 @@ func readConfig() conf.Config {
 }
 
 func startApp(config conf.Config) {
-	idgen.Init("1970-01-01", 0)
+	idgen.Init("2020-01-01", 0)
 
 	db := initDB(config)
 	model.Init(db)
@@ -45,6 +46,7 @@ func startApp(config conf.Config) {
 	cache := mycache.NewMemoryCache()
 
 	r := gin.Default()
+	r.Use(cors.Default())
 	api := r.Group("/api")
 	api.Use(middleware.ErrorHandler())
 
