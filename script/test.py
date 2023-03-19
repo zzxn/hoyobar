@@ -10,6 +10,7 @@ PREFIX='http://localhost:8080/api'
 CONCURRENT=100 # set it to 1 if using sqlite3
 N_USER = 97
 N_POST_PER_USER = 3
+N_POST_REPLY_PER_USR = 2
 
 
 def get(url: str, params, token=None):
@@ -70,10 +71,7 @@ def registerUsers(n: int):
     return users
 
 
-def main():
-    users = registerUsers(N_USER)
-
-    # make posts
+def makePosts(users):
     postList = []
     for authorID, user in tqdm.tqdm(users.items(), desc="create post"):
         for i in range(N_POST_PER_USER):
@@ -82,6 +80,24 @@ def main():
             assertOK(res)
             p["post_id"] = res.json()["post_id"]
             postList.append(p)
+    return postList
+
+
+def replyPost(postID, users):
+    replyList = []
+    for authorID, user in tqdm.tqdm(users.items(), desc="create reply"):
+        for i in range(N_POST_REPLY_PER_USR):
+            p = {"author_id": authorID, "post_id": str(postID), "content": f"content{i}{authorID}"}
+            res = post('/post/reply', p, user['auth_token'])
+            assertOK(res)
+            p["reply_id"] = res.json()["reply_id"]
+            replyList.append(p)
+    return replyList
+
+
+def main():
+    users = registerUsers(N_USER)
+    postList = makePosts(users)
 
     # query posts according create_time
     expectGen = (p for p in postList[::-1])
@@ -92,12 +108,40 @@ def main():
         res = get('/post/list', {"order": "create_time", "cursor": cursor})
         assertOK(res)
         cursor, page = res.json()["cursor"], res.json()["list"]
-        for realP in page:
+        for realR in page:
             expectCnt -= 1
             assert expectCnt >= 0
             progress.update(1)
-            expectP = next(expectGen)
+            expectR = next(expectGen)
             for field in ["post_id", "author_id", "title", "content"]:
-                assert realP[field] == expectP[field], f"expect {expectP}, got {realP}"
+                assert realR[field] == expectR[field], f"expect {expectR}, got {realR}"
+
+    # reply a post
+    postID = postList[0]["post_id"]
+    replyList = replyPost(postID, users)
+   
+    # after reply, the replied one should be the first one
+    res = get('/post/list', {"order": "reply_time"})
+    assertOK(res)
+    for field in ["post_id", "author_id", "title", "content"]:
+        assert res.json()["list"][0][field] == postList[0][field], f"expect {res.json()['list'][0]}, got {postList[0]}"
+
+    # query replies, check the order is right
+    expectGen = (r for r in replyList[::-1])
+    progress = tqdm.trange(len(replyList), desc="check reply")
+    expectCnt = len(replyList)
+    cursor = ""
+    while expectCnt > 0:
+        res = get('/post/reply/list', {"post_id": postID, "cursor": cursor})
+        assertOK(res)
+        cursor, page = res.json()["cursor"], res.json()["list"]
+        for realR in page:
+            expectCnt -= 1
+            assert expectCnt >= 0
+            progress.update(1)
+            expectR = next(expectGen)
+            for field in ["reply_id", "author_id", "content"]:
+                assert realR[field] == expectR[field], f"expect {expectR}, got {realR}"
+
 
 main()

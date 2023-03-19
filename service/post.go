@@ -46,14 +46,16 @@ type PostList struct {
 	Cursor string       `json:"cursor"`
 }
 
+type ReplyDetail struct {
+	ReplyID   int64     `json:"reply_id,string"`
+	AuthorID  int64     `json:"author_id,string"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type ReplyList struct {
-	List []struct {
-		ReplyID   int64     `json:"reply_id,string"`
-		AuthorID  string    `json:"author_id,string"`
-		Content   string    `json:"content"`
-		CreatedAt time.Time `json:"created_at"`
-	}
-	Cursor string
+	List   []ReplyDetail `json:"list"`
+	Cursor string        `json:"cursor"`
 }
 
 func (p *PostService) Create(authorID int64, title string, content string) (postID int64, err error) {
@@ -122,7 +124,7 @@ func (p *PostService) List(order string, cursor string, pageSize int) (list *Pos
 		Where("post_id < ?", lastID).
 		Order(fmt.Sprintf("%v DESC", orderField)).
 		Order("post_id DESC").
-		Limit(5).
+		Limit(pageSize).
 		Find(&posts).Error
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to query post")
@@ -157,12 +159,118 @@ func (p *PostService) List(order string, cursor string, pageSize int) (list *Pos
 	return list, nil
 }
 
-func (p *PostService) Reply(authorID int64, postID int64, content string) (err error) {
-	return
+func (p *PostService) Reply(authorID int64, postID int64, content string) (replyID int64, err error) {
+	// check params
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return 0, myerr.ErrBadReqBody.WithEmsg("内容不能为空")
+	}
+	userExist, err := p.checkUserExist(authorID)
+	if err != nil {
+		return 0, err
+	}
+	if false == userExist {
+		return 0, myerr.ErrResourceNotFound.WithEmsg("用户不存在")
+	}
+	postExist, err := p.checkPostExist(postID)
+	if err != nil {
+		return 0, err
+	}
+	if false == postExist {
+		return 0, myerr.ErrResourceNotFound.WithEmsg("帖子不存在")
+	}
+
+	// create reply
+	replyM := model.PostReply{
+		ReplyID:  idgen.New(),
+		AuthorID: authorID,
+		PostID:   postID,
+		Content:  content,
+	}
+	err = model.DB.Model(&replyM).Create(&replyM).Error
+	if err != nil {
+		return 0, myerr.OtherErrWarpf(err, "fail to create post reply")
+	}
+
+	// update post's reply time
+	err = model.DB.Model(&model.Post{}).Where("post_id = ?", postID).Update("reply_time", time.Now()).Error
+	if err != nil {
+		// minor err, log and ignore
+		log.Printf("fails to update reply time, post_id = %v\n", postID)
+		err = nil
+	}
+
+	return replyM.ReplyID, nil
 }
 
-func (p *PostService) ListReply(postID int64, cursor string) (list *ReplyList, err error) {
-	return
+func (p *PostService) ListReply(postID int64, cursor string, pageSize int) (list *ReplyList, err error) {
+	// check params
+	if pageSize <= 0 {
+		return nil, myerr.ErrBadReqBody.WithEmsg("页为空")
+	}
+	pageSize = funcs.Min(pageSize, conf.Global.App.MaxPageSize)
+	lastID, lastTime, err := decomposePageCursor(cursor)
+	if err != nil {
+		return nil, myerr.ErrBadReqBody.WithEmsg("页游标错误")
+	}
+	postExist, err := p.checkPostExist(postID)
+	if err != nil {
+		return nil, err
+	}
+	if false == postExist {
+		return nil, myerr.ErrResourceNotFound.WithEmsg("帖子不存在")
+	}
+
+	// find replies
+	var replies []model.PostReply
+	err = model.DB.Model(&model.PostReply{}).
+		Where("post_id = ?", postID).
+		Where("created_at <= ?", lastTime).
+		Where("reply_id < ?", lastID).
+		Order("created_at DESC").
+		Order("post_id DESC").
+		Limit(pageSize).
+		Find(&replies).Error
+	if err != nil {
+		return nil, myerr.OtherErrWarpf(err, "fail to query post reply")
+	}
+	if len(replies) == 0 {
+		return nil, myerr.ErrNoMoreEntry
+	}
+
+	n := len(replies)
+	newCursor := composePageCursor(replies[n-1].ReplyID, replies[n-1].CreatedAt)
+
+	list = &ReplyList{Cursor: newCursor}
+	for _, reply := range replies {
+		list.List = append(list.List, ReplyDetail{
+			ReplyID:   reply.ReplyID,
+			AuthorID:  reply.AuthorID,
+			Content:   reply.Content,
+			CreatedAt: reply.CreatedAt,
+		})
+	}
+	return list, nil
+}
+
+func (p *PostService) checkUserExist(userID int64) (ok bool, err error) {
+	var count int64
+	err = model.DB.Scopes(model.TableOfUser(&model.User{}, userID)).
+		Where("user_id = ?", userID).Count(&count).Error
+	if err != nil {
+		return false, myerr.OtherErrWarpf(err, "fails to check user existence")
+	}
+	return count > 0, nil
+}
+
+func (p *PostService) checkPostExist(postID int64) (ok bool, err error) {
+	var count int64
+	err = model.DB.Model(&model.Post{}).
+		Where("post_id = ?", postID).Count(&count).Error
+	if err != nil {
+		return false, myerr.OtherErrWarpf(err, "fails to check postID existence")
+	}
+	return count > 0, nil
 }
 
 var pageCursorTimeFormat = time.RFC3339Nano

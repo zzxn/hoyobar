@@ -45,6 +45,12 @@ type UserLoginReq struct {
 
 type PostCreateReq struct {
 	AuthorID int64  `json:"author_id,string" validate:"required"`
-	Title    string `validate:"required"`
-	Content  string `validate:"required"`
+	Title    string `validate:"required,min=1,max=50"`
+	Content  string `validate:"required,min=1,max=2000"`
+}
+
+type PostReplyReq struct {
+	AuthorID int64  `json:"author_id,string" validate:"required"`
+	PostID   int64  `json:"post_id,string" validate:"required"`
+	Content  string `json:"content" validate:"required,min=1,max=1000"`
 }
