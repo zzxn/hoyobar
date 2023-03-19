@@ -12,6 +12,7 @@ import (
 
 type PostHandler struct {
 	PostService *service.PostService
+	UserService *service.UserService
 }
 
 func (p *PostHandler) AddRoute(r *gin.RouterGroup) {
@@ -22,11 +23,24 @@ func (p *PostHandler) AddRoute(r *gin.RouterGroup) {
 	r.GET("/reply/list", gin.HandlerFunc(p.ListReply))
 }
 
+func (p *PostHandler) userID(c *gin.Context) int64 {
+	return c.GetInt64("user_id")
+}
+
 func (p *PostHandler) Create(c *gin.Context) {
 	req := &PostCreateReq{}
 	if failBindJSON(c, req) {
 		return
 	}
+	userID := p.userID(c)
+	if userID == 0 {
+		c.Error(myerr.ErrNotLogin)
+		return
+	}
+	if conf.Global.App.CheckUserIsAuthor && userID != req.AuthorID {
+		c.Error(myerr.ErrAuth.WithEmsg("无操作权限"))
+	}
+
 	postID, err := p.PostService.Create(req.AuthorID, req.Title, req.Content)
 	if err != nil {
 		c.Error(err)
@@ -42,6 +56,15 @@ func (p *PostHandler) Reply(c *gin.Context) {
 	if failBindJSON(c, req) {
 		return
 	}
+	userID := p.userID(c)
+	if userID == 0 {
+		c.Error(myerr.ErrNotLogin)
+		return
+	}
+	if conf.Global.App.CheckUserIsAuthor && userID != req.AuthorID {
+		c.Error(myerr.ErrAuth.WithEmsg("无操作权限"))
+	}
+
 	replyID, err := p.PostService.Reply(req.AuthorID, req.PostID, req.Content)
 	if err != nil {
 		c.Error(err)

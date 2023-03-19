@@ -16,5 +16,6 @@ sharding:
 app:
   port: 8080
   auth_token_expire: 10h
+  check_user_is_author: true
   default_page_size: 20
   max_page_size: 20

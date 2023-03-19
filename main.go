@@ -75,7 +75,10 @@ func startApp(config conf.Config) {
 
 	// post API
 	postService := service.NewPostService(cache)
-	postHandler = &handler.PostHandler{PostService: postService}
+	postHandler = &handler.PostHandler{
+		PostService: postService,
+		UserService: userService,
+	}
 	postHandler.AddRoute(api.Group("/post"))
 
 	r.Run(fmt.Sprintf(":%v", config.App.Port))
