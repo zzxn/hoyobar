@@ -20,7 +20,7 @@ func (UserEmail) TableName() string {
 
 func TableOfUserEmail(useremail *UserEmail, email string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		shardIdx := crypt.HashString(email, int64(conf.Global.Sharding.UserEmailShardN))
+		shardIdx := crypt.HashString(email, int64(conf.Global.Sharding.UserShardN))
 		tableName := useremail.TableName() + strconv.FormatInt(shardIdx, 10)
 		return db.Table(tableName)
 	}

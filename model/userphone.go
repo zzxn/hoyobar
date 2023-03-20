@@ -20,7 +20,7 @@ func (UserPhone) TableName() string {
 
 func TableOfUserPhone(userphone *UserPhone, phone string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		shardIdx := crypt.HashString(phone, int64(conf.Global.Sharding.UserPhoneShardN))
+		shardIdx := crypt.HashString(phone, int64(conf.Global.Sharding.UserShardN))
 		tableName := userphone.TableName() + strconv.FormatInt(shardIdx, 10)
 		return db.Table(tableName)
 	}

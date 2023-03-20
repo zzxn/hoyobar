@@ -48,14 +48,16 @@ func migrate(db *gorm.DB) {
 
 	// user need sharding
 	// unique index name cannot be the same, why?
-	autoMigrateShard(db, conf.Global.Sharding.UserShardN, User{}.TableName(), &User{})
-	autoMigrateShard(db, conf.Global.Sharding.UserEmailShardN, UserEmail{}.TableName(), &UserEmail{})
-	autoMigrateShard(db, conf.Global.Sharding.UserPhoneShardN, UserPhone{}.TableName(), &UserPhone{})
+	autoMigrateShard(db, conf.Global.Sharding.UserShardN, User{})
+	autoMigrateShard(db, conf.Global.Sharding.UserShardN, UserEmail{})
+	autoMigrateShard(db, conf.Global.Sharding.UserShardN, UserPhone{})
+	autoMigrateShard(db, conf.Global.Sharding.UserShardN, UserNickname{})
 }
 
-func autoMigrateShard(db *gorm.DB, shardN int, tableName string, modelPtr interface{}) {
+func autoMigrateShard(db *gorm.DB, shardN int, model interface{ TableName() string }) {
+	tableName := model.TableName()
 	for i := 0; i < shardN; i++ {
-		err := db.Debug().Table(tableName + strconv.Itoa(i)).AutoMigrate(modelPtr)
+		err := db.Debug().Table(tableName + strconv.Itoa(i)).AutoMigrate(&model)
 		if err != nil {
 			panic(err)
 		}

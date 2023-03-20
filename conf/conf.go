@@ -32,9 +32,7 @@ type Config struct {
 	} `yaml:"db"`
 
 	Sharding struct {
-		UserShardN      int `yaml:"user_shard_n"`
-		UserPhoneShardN int `yaml:"user_phone_shard_n"`
-		UserEmailShardN int `yaml:"user_email_shard_n"`
+		UserShardN int `yaml:"user_shard_n"`
 	} `yaml:"sharding"`
 
 	App struct {

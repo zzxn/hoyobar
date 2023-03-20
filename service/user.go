@@ -73,15 +73,27 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 		return nil, myerr.ErrWrongVcode
 	}
 
-	existUserID, err := u.UsernameToUserID(username)
+	existUserID, err := u.NicknameToUserID(args.Nickname)
 	if err != nil {
 		return nil, err
 	}
 	if existUserID != 0 {
-		return nil, myerr.ErrDupUser
+		return nil, myerr.ErrDupUser.WithEmsg("昵称已被占用")
+	}
+
+	existUserID, err = u.UsernameToUserID(username)
+	if err != nil {
+		return nil, err
+	}
+	if existUserID != 0 {
+		return nil, myerr.ErrDupUser.WithEmsg("该账户已存在")
 	}
 
 	var userID int64 = idgen.New()
+	err = u.createNickname(args.Nickname, userID)
+	if err != nil {
+		return nil, err
+	}
 	err = u.createUsername(username, userID)
 	if err != nil {
 		return nil, err
@@ -223,6 +235,26 @@ func (u *UserService) UsernameToUserID(username string) (int64, error) {
 	return userID, nil
 }
 
+// transform nickname to user ID.
+// attenion: if nickname not exist, return 0, nil
+func (u *UserService) NicknameToUserID(nickname string) (int64, error) {
+	var userID int64
+	var err error
+
+	nicknameM := model.UserNickname{}
+	err = model.DB.Scopes(model.TableOfUserNickname(&nicknameM, nickname)).
+		Where("nickname = ?", nickname).First(&nicknameM).Error
+	userID = nicknameM.UserID
+
+	if err == gorm.ErrRecordNotFound {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, myerr.OtherErrWarpf(err, "fail to check user existence")
+	}
+	return userID, nil
+}
+
 func (u *UserService) createUsername(username string, userID int64) error {
 	var err error
 
@@ -244,6 +276,16 @@ func (u *UserService) createUsername(username string, userID int64) error {
 
 	if err != nil {
 		return myerr.OtherErrWarpf(err, "fail to create username")
+	}
+	return nil
+}
+
+func (u *UserService) createNickname(nickname string, userID int64) error {
+	var err error
+	err = model.DB.Scopes(model.TableOfUserNickname(&model.UserNickname{}, nickname)).
+		Create(&model.UserNickname{Nickname: nickname, UserID: userID}).Error
+	if err != nil {
+		return myerr.OtherErrWarpf(err, "fail to create nickname")
 	}
 	return nil
 }

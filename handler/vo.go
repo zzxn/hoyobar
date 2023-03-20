@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"fmt"
 	"hoyobar/util/myerr"
+	"log"
 
 	"github.com/gin-gonic/gin"
 	vlid "github.com/go-playground/validator/v10"
@@ -18,7 +18,7 @@ func failBindJSON(c *gin.Context, req interface{}) bool {
 	}
 
 	// validate req
-	fmt.Printf("req: %#v\n", req)
+	log.Printf("req: %#v\n", req)
 	err := validator.Struct(req)
 	if err != nil {
 		c.Error(myerr.ErrBadReqBody.WithCause(err))
@@ -33,7 +33,7 @@ type AccountVerifyReq struct {
 
 type UserRegisterReq struct {
 	Username string `validate:"required"`
-	Nickname string `validate:"required,min=3,max=20"`
+	Nickname string `validate:"required,min=1,max=20"`
 	Password string `validate:"required"`
 	Vcode    string `validate:"required"`
 }
