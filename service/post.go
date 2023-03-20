@@ -193,7 +193,13 @@ func (p *PostService) Reply(authorID int64, postID int64, content string) (reply
 	}
 
 	// update post's reply time
-	err = model.DB.Model(&model.Post{}).Where("post_id = ?", postID).Update("reply_time", time.Now()).Error
+    now := time.Now()
+	err = model.DB.Model(&model.Post{}).Where("post_id = ?", postID).
+    Updates(map[string]interface{} {
+        "reply_time": now,
+        "updated_at": now,
+        "reply_num": gorm.Expr("reply_num + 1"),
+    }).Error
 	if err != nil {
 		// minor err, log and ignore
 		log.Printf("fails to update reply time, post_id = %v\n", postID)
