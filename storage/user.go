@@ -20,7 +20,7 @@ func NewUserStorageMySQL(db *gorm.DB) *UserStorageMySQL {
 }
 
 // FetchUser implements UserStorage
-func (u *UserStorageMySQL) FetchUser(userID int64) (*model.User, error) {
+func (u *UserStorageMySQL) FetchByUserID(userID int64) (*model.User, error) {
 	var userModel model.User
 	err := u.db.Scopes(model.TableOfUser(&userModel, userID)).
 		Where("user_id = ?", userID).First(&userModel).Error
@@ -34,9 +34,9 @@ func (u *UserStorageMySQL) FetchUser(userID int64) (*model.User, error) {
 }
 
 // HasUser implements UserStorage
-func (*UserStorageMySQL) HasUser(userID int64) (bool, error) {
+func (u *UserStorageMySQL) HasUser(userID int64) (bool, error) {
 	var count int64
-	err := model.DB.Scopes(model.TableOfUser(&model.User{}, userID)).
+	err := u.db.Scopes(model.TableOfUser(&model.User{}, userID)).
 		Where("user_id = ?", userID).Count(&count).Error
 	if err != nil {
 		return false, errors.Wrap(err, "fails to check user existence")
@@ -45,7 +45,7 @@ func (*UserStorageMySQL) HasUser(userID int64) (bool, error) {
 }
 
 // CreateUser implements UserStorage
-func (u *UserStorageMySQL) CreateUser(user *model.User) error {
+func (u *UserStorageMySQL) Create(user *model.User) error {
 	var err error
 	userID := user.UserID
 

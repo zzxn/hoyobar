@@ -42,7 +42,9 @@ func startApp(config conf.Config) {
 	idgen.Init("2020-01-01", 0)
 
 	db := initDB(config)
-	model.Init(db)
+	if conf.Global.DB.AutoMigrate {
+		model.Migrate(db)
+	}
 
 	cache := mycache.NewMemoryCache()
 
@@ -57,6 +59,8 @@ func startApp(config conf.Config) {
 	)
 
 	userStorage := storage.NewUserStorageMySQL(db)
+	postStorage := storage.NewPostStorageMySQL(db)
+	replyStorage := storage.NewPostReplyStorageMySQL(db)
 
 	// user API
 	userService := service.NewUserService(cache, userStorage)
@@ -77,7 +81,7 @@ func startApp(config conf.Config) {
 	userHandler.AddRoute(api.Group("/user"))
 
 	// post API
-	postService := service.NewPostService(cache, userStorage)
+	postService := service.NewPostService(cache, userStorage, postStorage, replyStorage)
 	postHandler = &handler.PostHandler{
 		PostService: postService,
 		UserService: userService,

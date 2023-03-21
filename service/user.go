@@ -110,7 +110,7 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 		return nil, myerr.ErrOther.WithEmsg("账号不是合法的邮箱或11位手机号")
 	}
 
-	err = u.userStorage.CreateUser(&userModel)
+	err = u.userStorage.Create(&userModel)
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to create user %q", username).
 			WithEmsg("注册失败")
@@ -171,12 +171,12 @@ func (u *UserService) Login(username, password string) (*UserBasic, error) {
 		return nil, myerr.ErrUserNotFound
 	}
 
-	userModel, err = u.userStorage.FetchUser(userID)
-	if userModel == nil {
-		return nil, myerr.ErrOther.WithEmsg("未找到用户数据，请联系客服")
-	}
+	userModel, err = u.userStorage.FetchByUserID(userID)
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to find user")
+	}
+	if userModel == nil {
+		return nil, myerr.ErrOther.WithEmsg("未找到用户数据，请联系客服")
 	}
 
 	if false == myhash.CompareHashAndPassword(userModel.Password, password) {
