@@ -7,6 +7,7 @@ import (
 	"hoyobar/middleware"
 	"hoyobar/model"
 	"hoyobar/service"
+	"hoyobar/storage"
 	"hoyobar/util/idgen"
 	"hoyobar/util/mycache"
 	"hoyobar/util/myerr"
@@ -33,7 +34,7 @@ func readConfig() conf.Config {
 	}
 	config := conf.FromYAML(r)
 	conf.Global = &config
-	fmt.Printf("config: %#v", config)
+	fmt.Printf("config: %#v\n", config)
 	return config
 }
 
@@ -55,8 +56,10 @@ func startApp(config conf.Config) {
 		postHandler handler.Handler
 	)
 
+	userStorage := storage.NewUserStorageMySQL(db)
+
 	// user API
-	userService := service.NewUserService(cache)
+	userService := service.NewUserService(cache, userStorage)
 	api.Use(middleware.ReadAuthToken(func(authToken string, c *gin.Context) {
 		userID, err := userService.AuthTokenToUserID(authToken)
 		if err != nil {
@@ -74,7 +77,7 @@ func startApp(config conf.Config) {
 	userHandler.AddRoute(api.Group("/user"))
 
 	// post API
-	postService := service.NewPostService(cache)
+	postService := service.NewPostService(cache, userStorage)
 	postHandler = &handler.PostHandler{
 		PostService: postService,
 		UserService: userService,

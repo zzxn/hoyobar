@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hoyobar/conf"
 	"hoyobar/model"
+	"hoyobar/storage"
 	"hoyobar/util/funcs"
 	"hoyobar/util/idgen"
 	"hoyobar/util/mycache"
@@ -18,15 +19,17 @@ import (
 )
 
 type PostService struct {
-	cache mycache.Cache
+	cache       mycache.Cache
+	userStorage storage.UserStorage
 }
 
-func NewPostService(cache mycache.Cache) *PostService {
+func NewPostService(cache mycache.Cache, userStorage storage.UserStorage) *PostService {
 	if conf.Global == nil {
 		log.Fatalf("conf.Global is not initialized")
 	}
 	postService := &PostService{
-		cache: cache,
+		cache:       cache,
+		userStorage: userStorage,
 	}
 	return postService
 }
@@ -165,9 +168,9 @@ func (p *PostService) Reply(authorID int64, postID int64, content string) (reply
 	if content == "" {
 		return 0, myerr.ErrBadReqBody.WithEmsg("内容不能为空")
 	}
-	userExist, err := p.checkUserExist(authorID)
+	userExist, err := p.userStorage.HasUser(authorID)
 	if err != nil {
-		return 0, err
+		return 0, myerr.OtherErrWarpf(err, "fail to query user %v", authorID)
 	}
 	if false == userExist {
 		return 0, myerr.ErrResourceNotFound.WithEmsg("用户不存在")
@@ -257,16 +260,6 @@ func (p *PostService) ListReply(postID int64, cursor string, pageSize int) (list
 		})
 	}
 	return list, nil
-}
-
-func (p *PostService) checkUserExist(userID int64) (ok bool, err error) {
-	var count int64
-	err = model.DB.Scopes(model.TableOfUser(&model.User{}, userID)).
-		Where("user_id = ?", userID).Count(&count).Error
-	if err != nil {
-		return false, myerr.OtherErrWarpf(err, "fails to check user existence")
-	}
-	return count > 0, nil
 }
 
 func (p *PostService) checkPostExist(postID int64) (ok bool, err error) {
