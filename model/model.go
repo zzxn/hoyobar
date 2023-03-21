@@ -38,7 +38,7 @@ func Init(db *gorm.DB) {
 func migrate(db *gorm.DB) {
 	// TODO: do we need to do this?
 	var err error
-	err = db.Debug().AutoMigrate(
+	err = db.AutoMigrate(
 		&Post{},
 		&PostReply{},
 	)
@@ -57,7 +57,7 @@ func migrate(db *gorm.DB) {
 func autoMigrateShard(db *gorm.DB, shardN int, model interface{ TableName() string }) {
 	tableName := model.TableName()
 	for i := 0; i < shardN; i++ {
-		err := db.Debug().Table(tableName + strconv.Itoa(i)).AutoMigrate(&model)
+		err := db.Table(tableName + strconv.Itoa(i)).AutoMigrate(&model)
 		if err != nil {
 			panic(err)
 		}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"hoyobar/conf"
+	"hoyobar/util/myhash"
 	"hoyobar/util/regexes"
 	"strconv"
 
@@ -25,7 +26,7 @@ func (User) TableName() string {
 
 func TableOfUser(user *User, userID int64) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		shardIdx := userID % int64(conf.Global.Sharding.UserShardN)
+		shardIdx := myhash.HashSnowflakeID(userID, int64(conf.Global.Sharding.UserShardN))
 		tableName := user.TableName() + strconv.FormatInt(shardIdx, 10)
 		return db.Table(tableName)
 	}

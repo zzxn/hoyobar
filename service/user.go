@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"hoyobar/conf"
 	"hoyobar/model"
-	"hoyobar/util/crypt"
 	"hoyobar/util/idgen"
 	"hoyobar/util/mycache"
 	"hoyobar/util/myerr"
+	"hoyobar/util/myhash"
 	"hoyobar/util/regexes"
 	"strings"
 
@@ -60,7 +60,7 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 	if !regexes.Password.MatchString(rawPass) {
 		return nil, myerr.ErrWeakPassword
 	}
-	passhash, err := crypt.HashPassword(rawPass)
+	passhash, err := myhash.HashPassword(rawPass)
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to hash password")
 	}
@@ -187,7 +187,7 @@ func (u *UserService) Login(username, password string) (*UserBasic, error) {
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to find user")
 	}
-	if false == crypt.CompareHashAndPassword(userModel.Password, password) {
+	if false == myhash.CompareHashAndPassword(userModel.Password, password) {
 		return nil, myerr.ErrWrongPassword
 	}
 	authToken := u.GenAndStoreAuthToken(userModel.UserID)
