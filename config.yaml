@@ -17,7 +17,12 @@ sharding:
   user_shard_n: 8
 app:
   port: 8080
-  auth_token_expire: 10h
   check_user_is_author: true
   default_page_size: 20
   max_page_size: 20
+  expire:
+    # if possible, the real expire will add a random num from (-e*jitter, +e*jitter)
+    jitter: 0.0
+    auth_token: 10h
+    user_info: 360h # 15 days
+    post_info: 168h # 10 days

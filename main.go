@@ -12,7 +12,9 @@ import (
 	"hoyobar/util/mycache"
 	"hoyobar/util/myerr"
 	"log"
+	"math/rand"
 	"os"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -23,6 +25,7 @@ import (
 )
 
 func main() {
+	rand.Seed(time.Now().Unix())
 	startApp(readConfig())
 }
 
