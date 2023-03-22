@@ -9,6 +9,10 @@ db:
     user: root
     pass: password
     db_name: hoyobar_test
+redis:
+  addr: localhost:6379
+  username: ""
+  password: ""
 sharding:
   user_shard_n: 8
 app:

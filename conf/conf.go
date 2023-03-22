@@ -31,6 +31,13 @@ type Config struct {
 		AutoMigrate bool `yaml:"auto_migrate"`
 	} `yaml:"db"`
 
+	Redis struct {
+		Addr     string `yaml:"addr"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		DB       int    `yaml:"db"`
+	} `yaml:"redis"`
+
 	Sharding struct {
 		UserShardN int `yaml:"user_shard_n"`
 	} `yaml:"sharding"`

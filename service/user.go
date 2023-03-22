@@ -1,13 +1,16 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"hoyobar/conf"
 	"hoyobar/model"
 	"hoyobar/storage"
+	"hoyobar/util/funcs"
 	"hoyobar/util/idgen"
 	"hoyobar/util/mycache"
+	"hoyobar/util/mycache/keys"
 	"hoyobar/util/myerr"
 	"hoyobar/util/myhash"
 	"hoyobar/util/regexes"
@@ -126,36 +129,34 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 	}, nil
 }
 
-func authTokenToCacheKey(authToken string) string {
-	return "(auth_token)" + authToken
-}
-
 func (u *UserService) GenAndStoreAuthToken(userID int64) string {
-	// TODO: store auth token into redis
 	token := strings.ReplaceAll(uuid.NewString(), "-", "")
-	u.cache.Set(authTokenToCacheKey(token), userID, conf.Global.App.AuthTokenExpire)
+    key := keys.AuthToken(token)
+    value := funcs.Itoa(userID)
+    expire := conf.Global.App.AuthTokenExpire
+	u.cache.Set(context.TODO(), key, value, expire)
 	return token
 }
 
 // convert auth token to user ID, also refresh cache
 func (u *UserService) AuthTokenToUserID(authToken string) (userID int64, err error) {
-	key := authTokenToCacheKey(authToken)
+	key := keys.AuthToken(authToken)
 
 	// get user ID from cache
-	value, err := u.cache.Get(key)
+	value, err := u.cache.Get(context.TODO(), key)
 	if err != nil {
 		return 0, myerr.OtherErrWarpf(err, "fail to query auth token cache key %q", key)
 	}
-	if value == nil {
+	if value == "" {
 		return 0, myerr.ErrNotLogin
 	}
-	userID, ok := value.(int64)
-	if !ok {
+	userID, err = funcs.Atoi(value)
+	if err != nil {
 		return 0, myerr.ErrOther.WithCause(fmt.Errorf("type of auth token cache value expect int64, got %T", value))
 	}
 
 	// update cache to avoid expiration, ignore error
-	_ = u.cache.Set(key, userID, conf.Global.App.AuthTokenExpire)
+	_ = u.cache.Set(context.TODO(), key, funcs.Itoa(userID), conf.Global.App.AuthTokenExpire)
 	return userID, nil
 }
 

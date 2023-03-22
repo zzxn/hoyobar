@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -46,7 +47,7 @@ func startApp(config conf.Config) {
 		model.Migrate(db)
 	}
 
-	cache := mycache.NewMemoryCache()
+	cache := initCache(config)
 
 	r := gin.Default()
 	r.Use(cors.Default())
@@ -124,4 +125,13 @@ func initDB(config conf.Config) *gorm.DB {
 		log.Fatalln("not recoginize db type:", config.DB.Type)
 	}
 	return db
+}
+
+func initCache(config conf.Config) mycache.Cache {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     conf.Global.Redis.Addr,
+		Username: conf.Global.Redis.Username,
+		Password: conf.Global.Redis.Password,
+	})
+	return mycache.NewRedisCache(rdb)
 }
