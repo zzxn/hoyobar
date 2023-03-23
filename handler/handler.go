@@ -18,8 +18,8 @@ func makeHandlerFunc(f func(context.Context, *gin.Context)) gin.HandlerFunc {
 	timeout := conf.Global.App.Timeout.Default
 	return gin.HandlerFunc(func(c *gin.Context) {
 		ctx := context.Background()
-        ctx, cancel := context.WithTimeout(ctx, timeout)
-        defer cancel()
+		ctx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
 		f(ctx, c)
 	})
 }

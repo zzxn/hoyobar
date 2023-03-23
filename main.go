@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/gin-contrib/cors"
+	// "github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
@@ -54,6 +55,7 @@ func startApp(config conf.Config) {
 	cache := initCache(config)
 
 	r := gin.Default()
+	// pprof.Register(r)
 	r.Use(cors.Default())
 	api := r.Group("/api")
 	api.Use(middleware.ErrorHandler())

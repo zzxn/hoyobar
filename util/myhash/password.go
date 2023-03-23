@@ -1,11 +1,17 @@
 package myhash
 
 import (
+	"hoyobar/conf"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
 func HashPassword(password string) (string, error) {
-	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	cost := 10
+	if conf.Global != nil {
+		cost = conf.Global.App.BcrytpCost
+	}
+	h, err := bcrypt.GenerateFromPassword([]byte(password), cost)
 	return string(h), err
 }
 
