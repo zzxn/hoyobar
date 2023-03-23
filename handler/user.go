@@ -25,7 +25,7 @@ func (u *UserHandler) AddRoute(r *gin.RouterGroup) {
 func (u *UserHandler) CheckOnline(ctx context.Context, c *gin.Context) {
 	value := c.Value("user_id")
 	if value == nil {
-		c.Error(myerr.ErrNotLogin)
+		c.Error(myerr.ErrNotLogin) //nolint:errcheck
 		return
 	}
 	c.JSON(http.StatusOK, fmt.Sprintf("you are online: %T(%v)", value, value))
@@ -38,7 +38,7 @@ func (u *UserHandler) VerifyAccount(ctx context.Context, c *gin.Context) {
 	}
 
 	if err := u.UserService.Verify(ctx, req.Username); err != nil {
-		c.Error(err)
+		c.Error(err) //nolint:errcheck
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -61,7 +61,7 @@ func (u *UserHandler) Register(ctx context.Context, c *gin.Context) {
 	})
 
 	if err != nil {
-		c.Error(err)
+		c.Error(err) //nolint:errcheck
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -70,7 +70,6 @@ func (u *UserHandler) Register(ctx context.Context, c *gin.Context) {
 		"nickname":   userBasic.Nickname,
 		"user_id":    strconv.FormatInt(userBasic.UserID, 10),
 	})
-	return
 }
 
 func (u *UserHandler) Login(ctx context.Context, c *gin.Context) {
@@ -80,7 +79,7 @@ func (u *UserHandler) Login(ctx context.Context, c *gin.Context) {
 	}
 	userBasic, err := u.UserService.Login(ctx, req.Username, req.Password)
 	if err != nil {
-		c.Error(err)
+		c.Error(err) // nolint:errcheck
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -89,7 +88,6 @@ func (u *UserHandler) Login(ctx context.Context, c *gin.Context) {
 		"nickname":   userBasic.Nickname,
 		"user_id":    strconv.FormatInt(userBasic.UserID, 10),
 	})
-	return
 }
 
 // func (u *UserHandler) GetUserInfo(c *gin.Context) {

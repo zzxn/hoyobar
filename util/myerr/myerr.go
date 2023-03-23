@@ -43,7 +43,8 @@ func (e *MyError) Cause() error {
 // wrap a cause error with ErrOther.
 // imsg is for inner message print.
 func OtherErrWarpf(cause error, imsg string, args ...interface{}) *MyError {
-	return ErrOther.WithCause(errors.Wrapf(cause, imsg, args))
+	// args forward must be with ... ends
+	return ErrOther.WithCause(errors.Wrapf(cause, imsg, args...))
 }
 
 func (e *MyError) WithCause(cause error) *MyError {

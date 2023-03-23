@@ -35,16 +35,16 @@ func (p *PostHandler) Create(ctx context.Context, c *gin.Context) {
 	}
 	userID := p.userID(c)
 	if userID == 0 {
-		c.Error(myerr.ErrNotLogin)
+		c.Error(myerr.ErrNotLogin) // nolint:errcheck
 		return
 	}
 	if conf.Global.App.CheckUserIsAuthor && userID != req.AuthorID {
-		c.Error(myerr.ErrAuth.WithEmsg("无操作权限"))
+		c.Error(myerr.ErrAuth.WithEmsg("无操作权限")) // nolint:errcheck
 	}
 
 	postID, err := p.PostService.Create(ctx, req.AuthorID, req.Title, req.Content)
 	if err != nil {
-		c.Error(err)
+		c.Error(err) // nolint:errcheck
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -59,16 +59,16 @@ func (p *PostHandler) Reply(ctx context.Context, c *gin.Context) {
 	}
 	userID := p.userID(c)
 	if userID == 0 {
-		c.Error(myerr.ErrNotLogin)
+		c.Error(myerr.ErrNotLogin) // nolint:errcheck
 		return
 	}
 	if conf.Global.App.CheckUserIsAuthor && userID != req.AuthorID {
-		c.Error(myerr.ErrAuth.WithEmsg("无操作权限"))
+		c.Error(myerr.ErrAuth.WithEmsg("无操作权限")) // nolint:errcheck
 	}
 
 	replyID, err := p.PostService.Reply(ctx, req.AuthorID, req.PostID, req.Content)
 	if err != nil {
-		c.Error(err)
+		c.Error(err) // nolint:errcheck
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -79,12 +79,12 @@ func (p *PostHandler) Reply(ctx context.Context, c *gin.Context) {
 func (p *PostHandler) Detail(ctx context.Context, c *gin.Context) {
 	postID, err := strconv.ParseInt(c.Query("post_id"), 10, 64)
 	if err != nil {
-		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的帖子ID"))
+		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的帖子ID")) // nolint:errcheck
 		return
 	}
 	detail, err := p.PostService.Detail(ctx, postID)
 	if err != nil {
-		c.Error(err)
+		c.Error(err) // nolint:errcheck
 		return
 	}
 	c.JSON(http.StatusOK, detail)
@@ -102,11 +102,11 @@ func (p *PostHandler) List(ctx context.Context, c *gin.Context) {
 	if pageSizeStr == "" {
 		pageSize = conf.Global.App.DefaultPageSize
 	} else if pageSize, err = strconv.Atoi(pageSizeStr); err != nil {
-		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的页大小"))
+		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的页大小")) // nolint:errcheck
 	}
 	list, err := p.PostService.List(ctx, order, cursor, pageSize)
 	if err != nil {
-		c.Error(err)
+		c.Error(err) // nolint:errcheck
 		return
 	}
 	c.JSON(http.StatusOK, list)
@@ -116,7 +116,7 @@ func (p *PostHandler) ListReply(ctx context.Context, c *gin.Context) {
 	var err error
 	postID, err := strconv.ParseInt(c.Query("post_id"), 10, 64)
 	if err != nil {
-		c.Error(myerr.ErrBadReqBody.WithCause(err).WithEmsg("不合法的帖子"))
+		c.Error(myerr.ErrBadReqBody.WithCause(err).WithEmsg("不合法的帖子")) // nolint:errcheck
 		return
 	}
 	cursor := c.Query("cursor")
@@ -125,11 +125,11 @@ func (p *PostHandler) ListReply(ctx context.Context, c *gin.Context) {
 	if pageSizeStr == "" {
 		pageSize = conf.Global.App.DefaultPageSize
 	} else if pageSize, err = strconv.Atoi(pageSizeStr); err != nil {
-		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的页大小"))
+		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的页大小")) // nolint:errcheck
 	}
 	list, err := p.PostService.ListReply(ctx, postID, cursor, pageSize)
 	if err != nil {
-		c.Error(err)
+		c.Error(err) // nolint:errcheck
 		return
 	}
 	c.JSON(http.StatusOK, list)

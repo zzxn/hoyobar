@@ -149,14 +149,14 @@ func (p *PostService) Reply(ctx context.Context, authorID int64, postID int64, c
 	if err != nil {
 		return 0, myerr.OtherErrWarpf(err, "fail to query user %v", authorID)
 	}
-	if false == userExist {
+	if !userExist {
 		return 0, myerr.ErrResourceNotFound.WithEmsg("用户不存在")
 	}
 	postExist, err := p.postStorage.HasPost(ctx, postID)
 	if err != nil {
 		return 0, err
 	}
-	if false == postExist {
+	if !postExist {
 		return 0, myerr.ErrResourceNotFound.WithEmsg("帖子不存在")
 	}
 
@@ -173,11 +173,10 @@ func (p *PostService) Reply(ctx context.Context, authorID int64, postID int64, c
 	}
 
 	// update post's reply time
-	p.postStorage.IncrementReplyNum(ctx, postID, 1)
+	err = p.postStorage.IncrementReplyNum(ctx, postID, 1)
 	if err != nil {
 		// minor err, log and ignore
 		log.Printf("fails to update reply time, post_id = %v\n", postID)
-		err = nil
 	}
 
 	return replyM.ReplyID, nil
@@ -194,7 +193,7 @@ func (p *PostService) ListReply(ctx context.Context, postID int64, cursor string
 	if err != nil {
 		return nil, err
 	}
-	if false == postExist {
+	if !postExist {
 		return nil, myerr.ErrResourceNotFound.WithEmsg("帖子不存在")
 	}
 

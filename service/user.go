@@ -302,7 +302,7 @@ func (u *UserService) Login(ctx context.Context, username, password string) (*Us
 			return nil, myerr.ErrOther.WithEmsg("未找到用户数据，请联系客服")
 		}
 
-		if false == myhash.CompareHashAndPassword(userModel.Password, password) {
+		if !myhash.CompareHashAndPassword(userModel.Password, password) {
 			return nil, myerr.ErrWrongPassword
 		}
 		userBasic = &UserBasic{
@@ -337,7 +337,7 @@ func (u *UserService) UsernameToUserID(ctx context.Context, username string) (in
 			log.Printf("success query phone %v from cache\n", username)
 			return userID, err
 		}
-		err = nil
+		// err != nil, but we don't care
 		userID, err = u.userStorage.PhoneToUserID(ctx, username)
 		if err == nil && userID != 0 {
 			_ = u.cache.SetInt64(ctx, key, userID, expire)
@@ -349,7 +349,7 @@ func (u *UserService) UsernameToUserID(ctx context.Context, username string) (in
 			log.Printf("success query email %v from cache\n", username)
 			return userID, err
 		}
-		err = nil
+		// err != nil, but we don't care
 		userID, err = u.userStorage.EmailToUserID(ctx, username)
 		if err == nil && userID != 0 {
 			_ = u.cache.SetInt64(ctx, key, userID, expire)
@@ -374,7 +374,7 @@ func (u *UserService) NicknameToUserID(ctx context.Context, nickname string) (in
 		log.Printf("success query nickname %v from cache\n", nickname)
 		return userID, err
 	}
-	err = nil
+	// err != nil, but we don't care
 	userID, err = u.userStorage.NicknameToUserID(ctx, nickname)
 	if err != nil {
 		return 0, myerr.OtherErrWarpf(err, "fail to check nickname existence")

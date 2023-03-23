@@ -78,7 +78,7 @@ func startApp(config conf.Config) {
 		// check timeout
 		select {
 		case <-ctx.Done():
-			c.Error(myerr.ErrTimeout.WithCause(ctx.Err()))
+			c.Error(myerr.ErrTimeout.WithCause(ctx.Err())) // nolint:errcheck
 			c.Abort()
 			return
 		default: // do nothing
@@ -105,7 +105,10 @@ func startApp(config conf.Config) {
 	}
 	postHandler.AddRoute(api.Group("/post"))
 
-	r.Run(fmt.Sprintf(":%v", config.App.Port))
+	err := r.Run(fmt.Sprintf(":%v", config.App.Port))
+	if err != nil {
+		log.Fatalf("app exit with err: %v\n", err)
+	}
 }
 
 func initSqlite3(config conf.Config) *gorm.DB {

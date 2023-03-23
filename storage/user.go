@@ -140,22 +140,19 @@ func (u *UserStorageMySQL) NicknameToUserID(ctx context.Context, nickname string
 }
 
 func (u *UserStorageMySQL) createPhone(phone string, userID int64) error {
-	var err error
-	err = u.db.Scopes(model.TableOfUserPhone(&model.UserPhone{}, phone)).
+	err := u.db.Scopes(model.TableOfUserPhone(&model.UserPhone{}, phone)).
 		Create(&model.UserPhone{Phone: phone, UserID: userID}).Error
 	return errors.Wrapf(err, "fails to create phone")
 }
 
 func (u *UserStorageMySQL) createEmail(email string, userID int64) error {
-	var err error
-	err = u.db.Scopes(model.TableOfUserEmail(&model.UserEmail{}, email)).
+	err := u.db.Scopes(model.TableOfUserEmail(&model.UserEmail{}, email)).
 		Create(&model.UserEmail{Email: email, UserID: userID}).Error
 	return errors.Wrapf(err, "fails to create email")
 }
 
 func (u *UserStorageMySQL) createNickname(nickname string, userID int64) error {
-	var err error
-	err = u.db.Scopes(model.TableOfUserNickname(&model.UserNickname{}, nickname)).
+	err := u.db.Scopes(model.TableOfUserNickname(&model.UserNickname{}, nickname)).
 		Create(&model.UserNickname{Nickname: nickname, UserID: userID}).Error
 	return errors.Wrapf(err, "fails to create nickname")
 }
