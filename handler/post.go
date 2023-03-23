@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"hoyobar/conf"
 	"hoyobar/service"
 	"hoyobar/util/myerr"
@@ -16,18 +17,18 @@ type PostHandler struct {
 }
 
 func (p *PostHandler) AddRoute(r *gin.RouterGroup) {
-	r.POST("/create", gin.HandlerFunc(p.Create))
-	r.POST("/reply", gin.HandlerFunc(p.Reply))
-	r.GET("/detail", gin.HandlerFunc(p.Detail))
-	r.GET("/list", gin.HandlerFunc(p.List))
-	r.GET("/reply/list", gin.HandlerFunc(p.ListReply))
+	r.POST("/create", makeHandlerFunc(p.Create))
+	r.POST("/reply", makeHandlerFunc(p.Reply))
+	r.GET("/detail", makeHandlerFunc(p.Detail))
+	r.GET("/list", makeHandlerFunc(p.List))
+	r.GET("/reply/list", makeHandlerFunc(p.ListReply))
 }
 
 func (p *PostHandler) userID(c *gin.Context) int64 {
 	return c.GetInt64("user_id")
 }
 
-func (p *PostHandler) Create(c *gin.Context) {
+func (p *PostHandler) Create(ctx context.Context, c *gin.Context) {
 	req := &PostCreateReq{}
 	if failBindJSON(c, req) {
 		return
@@ -41,7 +42,7 @@ func (p *PostHandler) Create(c *gin.Context) {
 		c.Error(myerr.ErrAuth.WithEmsg("无操作权限"))
 	}
 
-	postID, err := p.PostService.Create(req.AuthorID, req.Title, req.Content)
+	postID, err := p.PostService.Create(ctx, req.AuthorID, req.Title, req.Content)
 	if err != nil {
 		c.Error(err)
 		return
@@ -51,7 +52,7 @@ func (p *PostHandler) Create(c *gin.Context) {
 	})
 }
 
-func (p *PostHandler) Reply(c *gin.Context) {
+func (p *PostHandler) Reply(ctx context.Context, c *gin.Context) {
 	req := &PostReplyReq{}
 	if failBindJSON(c, req) {
 		return
@@ -65,7 +66,7 @@ func (p *PostHandler) Reply(c *gin.Context) {
 		c.Error(myerr.ErrAuth.WithEmsg("无操作权限"))
 	}
 
-	replyID, err := p.PostService.Reply(req.AuthorID, req.PostID, req.Content)
+	replyID, err := p.PostService.Reply(ctx, req.AuthorID, req.PostID, req.Content)
 	if err != nil {
 		c.Error(err)
 		return
@@ -75,13 +76,13 @@ func (p *PostHandler) Reply(c *gin.Context) {
 	})
 }
 
-func (p *PostHandler) Detail(c *gin.Context) {
+func (p *PostHandler) Detail(ctx context.Context, c *gin.Context) {
 	postID, err := strconv.ParseInt(c.Query("post_id"), 10, 64)
 	if err != nil {
 		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的帖子ID"))
 		return
 	}
-	detail, err := p.PostService.Detail(postID)
+	detail, err := p.PostService.Detail(ctx, postID)
 	if err != nil {
 		c.Error(err)
 		return
@@ -89,7 +90,7 @@ func (p *PostHandler) Detail(c *gin.Context) {
 	c.JSON(http.StatusOK, detail)
 }
 
-func (p *PostHandler) List(c *gin.Context) {
+func (p *PostHandler) List(ctx context.Context, c *gin.Context) {
 	var err error
 	order := c.Query("order")
 	if order == "" {
@@ -103,7 +104,7 @@ func (p *PostHandler) List(c *gin.Context) {
 	} else if pageSize, err = strconv.Atoi(pageSizeStr); err != nil {
 		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的页大小"))
 	}
-	list, err := p.PostService.List(order, cursor, pageSize)
+	list, err := p.PostService.List(ctx, order, cursor, pageSize)
 	if err != nil {
 		c.Error(err)
 		return
@@ -111,7 +112,7 @@ func (p *PostHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, list)
 }
 
-func (p *PostHandler) ListReply(c *gin.Context) {
+func (p *PostHandler) ListReply(ctx context.Context, c *gin.Context) {
 	var err error
 	postID, err := strconv.ParseInt(c.Query("post_id"), 10, 64)
 	if err != nil {
@@ -126,7 +127,7 @@ func (p *PostHandler) ListReply(c *gin.Context) {
 	} else if pageSize, err = strconv.Atoi(pageSizeStr); err != nil {
 		c.Error(myerr.ErrBadReqBody.WithEmsg("不合法的页大小"))
 	}
-	list, err := p.PostService.ListReply(postID, cursor, pageSize)
+	list, err := p.PostService.ListReply(ctx, postID, cursor, pageSize)
 	if err != nil {
 		c.Error(err)
 		return

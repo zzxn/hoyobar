@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"hoyobar/conf"
 	"hoyobar/model"
 	"hoyobar/storage"
@@ -66,7 +67,7 @@ type ReplyList struct {
 	Cursor string        `json:"cursor"`
 }
 
-func (p *PostService) Create(authorID int64, title string, content string) (postID int64, err error) {
+func (p *PostService) Create(ctx context.Context, authorID int64, title string, content string) (postID int64, err error) {
 	// TODO: check authentication and authority
 	postID = idgen.New()
 	postM := model.Post{
@@ -77,15 +78,15 @@ func (p *PostService) Create(authorID int64, title string, content string) (post
 		ReplyTime: time.Now(),
 		ReplyNum:  0,
 	}
-	err = p.postStorage.Create(&postM)
+	err = p.postStorage.Create(ctx, &postM)
 	if err != nil {
 		return 0, myerr.OtherErrWarpf(err, "fail to create post data")
 	}
 	return postID, nil
 }
 
-func (p *PostService) Detail(postID int64) (detail *PostDetail, err error) {
-	postM, err := p.postStorage.FetchByPostID(postID)
+func (p *PostService) Detail(ctx context.Context, postID int64) (detail *PostDetail, err error) {
+	postM, err := p.postStorage.FetchByPostID(ctx, postID)
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to query post %v", postID)
 	}
@@ -93,7 +94,7 @@ func (p *PostService) Detail(postID int64) (detail *PostDetail, err error) {
 		return nil, myerr.ErrResourceNotFound.WithEmsg("帖子不存在")
 	}
 	var authorNickname string
-	author, err := p.userStorage.FetchByUserID(postM.AuthorID)
+	author, err := p.userStorage.FetchByUserID(ctx, postM.AuthorID)
 	if err != nil && author != nil {
 		authorNickname = author.Nickname
 	}
@@ -111,12 +112,12 @@ func (p *PostService) Detail(postID int64) (detail *PostDetail, err error) {
 
 // order: one of "create_time" and "reply_time", desc order
 // cursor: the cursor returned by last call with the same params
-func (p *PostService) List(order string, cursor string, pageSize int) (list *PostList, err error) {
+func (p *PostService) List(ctx context.Context, order string, cursor string, pageSize int) (list *PostList, err error) {
 	if pageSize <= 0 {
 		return nil, myerr.ErrBadReqBody.WithEmsg("页为空")
 	}
 	pageSize = funcs.Min(pageSize, conf.Global.App.MaxPageSize)
-	postMs, newCursor, err := p.postStorage.List(order, cursor, pageSize)
+	postMs, newCursor, err := p.postStorage.List(ctx, order, cursor, pageSize)
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to query posts")
 	}
@@ -138,20 +139,20 @@ func (p *PostService) List(order string, cursor string, pageSize int) (list *Pos
 	return list, nil
 }
 
-func (p *PostService) Reply(authorID int64, postID int64, content string) (replyID int64, err error) {
+func (p *PostService) Reply(ctx context.Context, authorID int64, postID int64, content string) (replyID int64, err error) {
 	// check params
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return 0, myerr.ErrBadReqBody.WithEmsg("内容不能为空")
 	}
-	userExist, err := p.userStorage.HasUser(authorID)
+	userExist, err := p.userStorage.HasUser(ctx, authorID)
 	if err != nil {
 		return 0, myerr.OtherErrWarpf(err, "fail to query user %v", authorID)
 	}
 	if false == userExist {
 		return 0, myerr.ErrResourceNotFound.WithEmsg("用户不存在")
 	}
-	postExist, err := p.postStorage.HasPost(postID)
+	postExist, err := p.postStorage.HasPost(ctx, postID)
 	if err != nil {
 		return 0, err
 	}
@@ -166,13 +167,13 @@ func (p *PostService) Reply(authorID int64, postID int64, content string) (reply
 		PostID:   postID,
 		Content:  content,
 	}
-	err = p.replyStorage.Create(&replyM)
+	err = p.replyStorage.Create(ctx, &replyM)
 	if err != nil {
 		return 0, myerr.OtherErrWarpf(err, "fail to create post reply")
 	}
 
 	// update post's reply time
-	p.postStorage.IncrementReplyNum(postID, 1)
+	p.postStorage.IncrementReplyNum(ctx, postID, 1)
 	if err != nil {
 		// minor err, log and ignore
 		log.Printf("fails to update reply time, post_id = %v\n", postID)
@@ -182,14 +183,14 @@ func (p *PostService) Reply(authorID int64, postID int64, content string) (reply
 	return replyM.ReplyID, nil
 }
 
-func (p *PostService) ListReply(postID int64, cursor string, pageSize int) (list *ReplyList, err error) {
+func (p *PostService) ListReply(ctx context.Context, postID int64, cursor string, pageSize int) (list *ReplyList, err error) {
 	// check params
 	if pageSize <= 0 {
 		return nil, myerr.ErrBadReqBody.WithEmsg("页为空")
 	}
 	pageSize = funcs.Min(pageSize, conf.Global.App.MaxPageSize)
 
-	postExist, err := p.postStorage.HasPost(postID)
+	postExist, err := p.postStorage.HasPost(ctx, postID)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +199,7 @@ func (p *PostService) ListReply(postID int64, cursor string, pageSize int) (list
 	}
 
 	// find replies
-	replies, newCursor, err := p.replyStorage.List(postID, storage.PostReplyOrderCreateTimeDesc, cursor, pageSize)
+	replies, newCursor, err := p.replyStorage.List(ctx, postID, storage.PostReplyOrderCreateTimeDesc, cursor, pageSize)
 	if len(replies) == 0 {
 		return nil, myerr.ErrNoMoreEntry
 	}

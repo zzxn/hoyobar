@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"hoyobar/model"
 
 	"github.com/pkg/errors"
@@ -20,7 +21,7 @@ func NewUserStorageMySQL(db *gorm.DB) *UserStorageMySQL {
 }
 
 // FetchUser implements UserStorage
-func (u *UserStorageMySQL) FetchByUserID(userID int64) (*model.User, error) {
+func (u *UserStorageMySQL) FetchByUserID(ctx context.Context, userID int64) (*model.User, error) {
 	var userModel model.User
 	err := u.db.Scopes(model.TableOfUser(&userModel, userID)).
 		Where("user_id = ?", userID).First(&userModel).Error
@@ -34,7 +35,7 @@ func (u *UserStorageMySQL) FetchByUserID(userID int64) (*model.User, error) {
 }
 
 // HasUser implements UserStorage
-func (u *UserStorageMySQL) HasUser(userID int64) (bool, error) {
+func (u *UserStorageMySQL) HasUser(ctx context.Context, userID int64) (bool, error) {
 	var count int64
 	err := u.db.Scopes(model.TableOfUser(&model.User{}, userID)).
 		Where("user_id = ?", userID).Count(&count).Error
@@ -45,7 +46,7 @@ func (u *UserStorageMySQL) HasUser(userID int64) (bool, error) {
 }
 
 // CreateUser implements UserStorage
-func (u *UserStorageMySQL) Create(user *model.User) error {
+func (u *UserStorageMySQL) Create(ctx context.Context, user *model.User) error {
 	var err error
 	userID := user.UserID
 
@@ -82,7 +83,7 @@ func (u *UserStorageMySQL) Create(user *model.User) error {
 }
 
 // PhoneToUserID implements UserStorage
-func (u *UserStorageMySQL) PhoneToUserID(phone string) (int64, error) {
+func (u *UserStorageMySQL) PhoneToUserID(ctx context.Context, phone string) (int64, error) {
 	var userID int64
 	var err error
 
@@ -101,7 +102,7 @@ func (u *UserStorageMySQL) PhoneToUserID(phone string) (int64, error) {
 }
 
 // EmailToUserID implements UserStorage
-func (u *UserStorageMySQL) EmailToUserID(email string) (int64, error) {
+func (u *UserStorageMySQL) EmailToUserID(ctx context.Context, email string) (int64, error) {
 	var userID int64
 	var err error
 
@@ -120,7 +121,7 @@ func (u *UserStorageMySQL) EmailToUserID(email string) (int64, error) {
 }
 
 // NicknameToUserID implements UserStorage
-func (u *UserStorageMySQL) NicknameToUserID(nickname string) (int64, error) {
+func (u *UserStorageMySQL) NicknameToUserID(ctx context.Context, nickname string) (int64, error) {
 	var userID int64
 	var err error
 

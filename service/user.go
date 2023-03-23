@@ -8,6 +8,7 @@ import (
 	"hoyobar/conf"
 	"hoyobar/model"
 	"hoyobar/storage"
+	"hoyobar/util/funcs"
 	"hoyobar/util/idgen"
 	"hoyobar/util/mycache"
 	"hoyobar/util/mycache/keys"
@@ -52,8 +53,26 @@ type RegisterInfo struct {
 	Nickname string `json:"nickname"`
 }
 
+type UsernameType int
+
+func GetUsernameType(username string) UsernameType {
+	if regexes.Email.MatchString(username) {
+		return UsernameTypeEmail
+	}
+	if regexes.Phone.MatchString(username) {
+		return UsernameTypePhone
+	}
+	return UsernameTypeNone
+}
+
+const (
+	UsernameTypeNone UsernameType = iota
+	UsernameTypePhone
+	UsernameTypeEmail
+)
+
 // send verification code to email/phone represented by username
-func (u *UserService) Verify(username string) error {
+func (u *UserService) Verify(ctx context.Context, username string) error {
 	// TODO:
 	return nil
 }
@@ -63,7 +82,7 @@ func (u *UserService) checkVcode(username string, vcode string) (bool, error) {
 	return true, nil
 }
 
-func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
+func (u *UserService) Register(ctx context.Context, args *RegisterInfo) (*UserBasic, error) {
 	var err error
 	username, rawPass := args.Username, args.Password
 
@@ -83,109 +102,157 @@ func (u *UserService) Register(args *RegisterInfo) (*UserBasic, error) {
 		return nil, myerr.ErrWrongVcode
 	}
 
-	existUserID, err := u.NicknameToUserID(args.Nickname)
+	err = u.checkUserExist(ctx, args)
 	if err != nil {
 		return nil, err
-	}
-	if existUserID != 0 {
-		return nil, myerr.ErrDupUser.WithEmsg("昵称已被占用")
-	}
-
-	existUserID, err = u.UsernameToUserID(username)
-	if err != nil {
-		return nil, err
-	}
-	if existUserID != 0 {
-		return nil, myerr.ErrDupUser.WithEmsg("该账户已存在")
 	}
 
 	var userID int64 = idgen.New()
 
-	usernameType := UsernameType(username)
+	usernameType := GetUsernameType(username)
 	userModel := model.User{
 		UserID:   userID,
 		Password: passhash,
 		Nickname: args.Nickname,
 	}
-	if usernameType == "phone" {
+	switch usernameType {
+	case UsernameTypePhone:
 		userModel.Phone = sql.NullString{String: username, Valid: true}
-	} else if usernameType == "email" {
+	case UsernameTypeEmail:
 		userModel.Email = sql.NullString{String: username, Valid: true}
-	} else {
+	default:
 		return nil, myerr.ErrOther.WithEmsg("账号不是合法的邮箱或11位手机号")
 	}
 
-	err = u.userStorage.Create(&userModel)
+	err = u.userStorage.Create(ctx, &userModel)
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to create user %q", username).
 			WithEmsg("注册失败")
 	}
+	u.writeCacheUserNames(userModel)
 
-	userInfoExpire := conf.Global.App.Expire.UserInfo
-
-	if userModel.Email.Valid {
-		_ = u.cache.SetInt64(context.TODO(),
-			keys.EmailToUserID(userModel.Email.String), userID,
-			userInfoExpire,
-		)
+	userBasic := &UserBasic{
+		UserID:   userModel.UserID,
+		Phone:    userModel.Phone.String,
+		Email:    userModel.Email.String,
+		Nickname: userModel.Nickname,
 	}
+	u.writeCacheUserBasic(ctx, *userBasic)
 
-	if userModel.Phone.Valid {
-		_ = u.cache.SetInt64(context.TODO(),
-			keys.PhoneToUserID(userModel.Phone.String), userID,
-			userInfoExpire,
-		)
-	}
-
-	_ = u.cache.SetInt64(context.TODO(),
-		keys.NicknameToUserID(userModel.Nickname), userID,
-		userInfoExpire,
-	)
-
-	authToken, err := u.genAndStoreAuthToken(userID)
+	authToken, err := u.genAndStoreAuthToken(ctx, userID)
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to write auth token").WithEmsg("请稍后尝试登录")
 	}
-
-	userBasic := &UserBasic{
-		UserID:    userModel.UserID,
-		Phone:     userModel.Phone.String,
-		Email:     userModel.Email.String,
-		Nickname:  userModel.Nickname,
-		AuthToken: authToken,
-	}
-
-	u.writeCacheUserBasic(*userBasic)
+	userBasic.AuthToken = authToken
 	return userBasic, nil
 }
 
-func (u *UserService) genAndStoreAuthToken(userID int64) (string, error) {
+func (u *UserService) checkUserExist(ctx context.Context, args *RegisterInfo) error {
+	// check if user exist by username and nickname
+	checkUserExistChan := make(chan error)
+
+	checkUserExistFuncs := make([]func(), 0)
+	checkUserExistFuncs = append(checkUserExistFuncs, func() {
+		existUserID, err := u.NicknameToUserID(ctx, args.Nickname)
+		if err != nil {
+			checkUserExistChan <- err
+			return
+		}
+		if existUserID != 0 {
+			checkUserExistChan <- myerr.ErrDupUser.WithEmsg("该昵称已被占用")
+			return
+		}
+		checkUserExistChan <- nil
+	})
+	checkUserExistFuncs = append(checkUserExistFuncs, func() {
+		existUserID, err := u.UsernameToUserID(ctx, args.Username)
+		if err != nil {
+			checkUserExistChan <- err
+			return
+		}
+		if existUserID != 0 {
+			checkUserExistChan <- myerr.ErrDupUser.WithEmsg("该账户已存在")
+			return
+		}
+		checkUserExistChan <- nil
+	})
+
+	for _, f := range checkUserExistFuncs {
+		funcs.Go(f)
+	}
+
+	for range checkUserExistFuncs {
+		err := <-checkUserExistChan
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (u *UserService) genAndStoreAuthToken(ctx context.Context, userID int64) (string, error) {
 	token := strings.ReplaceAll(uuid.NewString(), "-", "")
 	key := keys.AuthToken(token)
 	expire := conf.Global.App.Expire.AuthToken
-	if err := u.cache.SetInt64(context.TODO(), key, userID, expire); err != nil {
-		return "", errors.Wrapf(err, "fail to write auth token to redis")
+	if err := u.cache.SetInt64(ctx, key, userID, expire); err != nil {
+		return "", errors.Wrapf(err, "fail to write auth token to cache")
 	}
 	return token, nil
 }
 
-func (u *UserService) writeCacheUserBasic(user UserBasic) {
+func (u *UserService) writeCacheUserBasic(ctx context.Context, user UserBasic) {
 	if user.UserID == 0 {
 		return
 	}
-	key := keys.UserBasic(user.UserID)
-	user.AuthToken = ""
-	value, err := json.Marshal(user)
-	if err != nil {
-		return
-	}
-	expire := conf.Global.App.Expire.UserInfo
-	_ = u.cache.Set(context.TODO(), key, string(value), expire)
+	funcs.Go(func() {
+		timeout := conf.Global.App.Timeout.Default
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		key := keys.UserBasic(user.UserID)
+		user.AuthToken = ""
+		value, err := json.Marshal(user)
+		if err != nil {
+			return
+		}
+		expire := conf.Global.App.Expire.UserInfo
+		_ = u.cache.Set(ctx, key, string(value), expire)
+	})
 }
 
-func (u *UserService) readCacheUserBasic(userID int64) *UserBasic {
+func (u *UserService) writeCacheUserNames(userModel model.User) {
+	userInfoExpire := conf.Global.App.Expire.UserInfo
+	userID := userModel.UserID
+
+	// we don't really care if this will be done
+	tmpUserModel := userModel // copy one to avoid possible problems
+	funcs.Go(func() {
+		timeout := conf.Global.App.Timeout.Default
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if userModel.Email.Valid {
+			_ = u.cache.SetInt64(ctx,
+				keys.EmailToUserID(tmpUserModel.Email.String), userID,
+				userInfoExpire,
+			)
+		}
+
+		if userModel.Phone.Valid {
+			_ = u.cache.SetInt64(ctx,
+				keys.PhoneToUserID(tmpUserModel.Phone.String), userID,
+				userInfoExpire,
+			)
+		}
+
+		_ = u.cache.SetInt64(ctx,
+			keys.NicknameToUserID(userModel.Nickname), userID,
+			userInfoExpire,
+		)
+	})
+}
+
+func (u *UserService) readCacheUserBasic(ctx context.Context, userID int64) *UserBasic {
 	key := keys.UserBasic(userID)
-	data, err := u.cache.Get(context.TODO(), key)
+	data, err := u.cache.Get(ctx, key)
 	if err != nil {
 		return nil
 	}
@@ -199,11 +266,11 @@ func (u *UserService) readCacheUserBasic(userID int64) *UserBasic {
 }
 
 // convert auth token to user ID, also refresh cache
-func (u *UserService) AuthTokenToUserID(authToken string) (userID int64, err error) {
+func (u *UserService) AuthTokenToUserID(ctx context.Context, authToken string) (userID int64, err error) {
 	key := keys.AuthToken(authToken)
 
 	// get user ID from cache
-	userID, err = u.cache.GetInt64(context.TODO(), key)
+	userID, err = u.cache.GetInt64(ctx, key)
 	if err == mycache.ErrNotFound {
 		return 0, myerr.ErrNotLogin
 	}
@@ -213,10 +280,10 @@ func (u *UserService) AuthTokenToUserID(authToken string) (userID int64, err err
 	return userID, nil
 }
 
-func (u *UserService) Login(username, password string) (*UserBasic, error) {
+func (u *UserService) Login(ctx context.Context, username, password string) (*UserBasic, error) {
 	var err error
 
-	userID, err := u.UsernameToUserID(username)
+	userID, err := u.UsernameToUserID(ctx, username)
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fails to query username %v", username)
 	}
@@ -225,9 +292,9 @@ func (u *UserService) Login(username, password string) (*UserBasic, error) {
 	}
 
 	var userBasic *UserBasic
-	userBasic = u.readCacheUserBasic(userID)
+	userBasic = u.readCacheUserBasic(ctx, userID)
 	if userBasic == nil {
-		userModel, err := u.userStorage.FetchByUserID(userID)
+		userModel, err := u.userStorage.FetchByUserID(ctx, userID)
 		if err != nil {
 			return nil, myerr.OtherErrWarpf(err, "fail to find user")
 		}
@@ -245,7 +312,7 @@ func (u *UserService) Login(username, password string) (*UserBasic, error) {
 			Nickname: userModel.Nickname,
 		}
 	}
-	authToken, err := u.genAndStoreAuthToken(userBasic.UserID)
+	authToken, err := u.genAndStoreAuthToken(ctx, userBasic.UserID)
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to write auth token").WithEmsg("请稍后尝试登录")
 	}
@@ -255,38 +322,39 @@ func (u *UserService) Login(username, password string) (*UserBasic, error) {
 
 // transform username to user ID.
 // attenion: if username not exist, return 0, nil
-func (u *UserService) UsernameToUserID(username string) (int64, error) {
+func (u *UserService) UsernameToUserID(ctx context.Context, username string) (int64, error) {
 	var userID int64
 	var err error
 
-	usernameType := UsernameType(username)
+	usernameType := GetUsernameType(username)
 	expire := conf.Global.App.Expire.UserInfo
 
-	if usernameType == "phone" {
+	switch usernameType {
+	case UsernameTypePhone:
 		key := keys.PhoneToUserID(username)
-		userID, err = u.cache.GetInt64(context.TODO(), key)
+		userID, err = u.cache.GetInt64(ctx, key)
 		if err == nil {
 			log.Printf("success query phone %v from cache\n", username)
 			return userID, err
 		}
 		err = nil
-		userID, err = u.userStorage.PhoneToUserID(username)
+		userID, err = u.userStorage.PhoneToUserID(ctx, username)
 		if err == nil && userID != 0 {
-			_ = u.cache.SetInt64(context.TODO(), key, userID, expire)
+			_ = u.cache.SetInt64(ctx, key, userID, expire)
 		}
-	} else if usernameType == "email" {
+	case UsernameTypeEmail:
 		key := keys.EmailToUserID(username)
-		userID, err = u.cache.GetInt64(context.TODO(), key)
+		userID, err = u.cache.GetInt64(ctx, key)
 		if err == nil {
 			log.Printf("success query email %v from cache\n", username)
 			return userID, err
 		}
 		err = nil
-		userID, err = u.userStorage.EmailToUserID(username)
+		userID, err = u.userStorage.EmailToUserID(ctx, username)
 		if err == nil && userID != 0 {
-			_ = u.cache.SetInt64(context.TODO(), key, userID, expire)
+			_ = u.cache.SetInt64(ctx, key, userID, expire)
 		}
-	} else {
+	default:
 		return 0, myerr.OtherErrWarpf(fmt.Errorf(""), "not support username type %v", usernameType).
 			WithEmsg("账号不是合法的邮箱或手机号")
 	}
@@ -299,31 +367,21 @@ func (u *UserService) UsernameToUserID(username string) (int64, error) {
 
 // transform nickname to user ID.
 // attenion: if nickname not exist, return 0, nil
-func (u *UserService) NicknameToUserID(nickname string) (int64, error) {
+func (u *UserService) NicknameToUserID(ctx context.Context, nickname string) (int64, error) {
 	key := keys.NicknameToUserID(nickname)
-	userID, err := u.cache.GetInt64(context.TODO(), key)
+	userID, err := u.cache.GetInt64(ctx, key)
 	if err == nil {
 		log.Printf("success query nickname %v from cache\n", nickname)
 		return userID, err
 	}
 	err = nil
-	userID, err = u.userStorage.NicknameToUserID(nickname)
+	userID, err = u.userStorage.NicknameToUserID(ctx, nickname)
 	if err != nil {
 		return 0, myerr.OtherErrWarpf(err, "fail to check nickname existence")
 	}
 	if userID != 0 {
 		expire := conf.Global.App.Expire.UserInfo
-		_ = u.cache.SetInt64(context.TODO(), key, userID, expire)
+		_ = u.cache.SetInt64(ctx, key, userID, expire)
 	}
 	return userID, nil
-}
-
-func UsernameType(username string) string {
-	if regexes.Email.MatchString(username) {
-		return "email"
-	}
-	if regexes.Phone.MatchString(username) {
-		return "phone"
-	}
-	return "unknown"
 }

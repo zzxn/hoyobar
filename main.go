@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"hoyobar/conf"
 	"hoyobar/handler"
@@ -69,7 +70,17 @@ func startApp(config conf.Config) {
 	// user API
 	userService := service.NewUserService(cache, userStorage)
 	api.Use(middleware.ReadAuthToken(func(authToken string, c *gin.Context) {
-		userID, err := userService.AuthTokenToUserID(authToken)
+		ctx, cancel := context.WithTimeout(context.Background(), config.App.Timeout.Default)
+		defer cancel()
+		userID, err := userService.AuthTokenToUserID(ctx, authToken)
+		// check timeout
+		select {
+		case <-ctx.Done():
+			c.Error(myerr.ErrTimeout.WithCause(ctx.Err()))
+			c.Abort()
+			return
+		default: // do nothing
+		}
 		if err != nil {
 			if e, ok := err.(*myerr.MyError); ok {
 				log.Println("fails to read user ID from auth token, cause:", e.Cause())

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"hoyobar/conf"
 	"hoyobar/model"
@@ -24,13 +25,13 @@ func NewPostStorageMySQL(db *gorm.DB) *PostStorageMySQL {
 }
 
 // Create implements PostStorage
-func (p *PostStorageMySQL) Create(post *model.Post) error {
+func (p *PostStorageMySQL) Create(ctx context.Context, post *model.Post) error {
 	err := p.db.Create(post).Error
 	return errors.Wrapf(err, "fail to create post data")
 }
 
 // FetchByPostID implements PostStorage
-func (p *PostStorageMySQL) FetchByPostID(postID int64) (*model.Post, error) {
+func (p *PostStorageMySQL) FetchByPostID(ctx context.Context, postID int64) (*model.Post, error) {
 	postM := model.Post{}
 	err := p.db.Model(&model.Post{}).Where("post_id = ?", postID).First(&postM).Error
 	if err == gorm.ErrRecordNotFound {
@@ -43,7 +44,7 @@ func (p *PostStorageMySQL) FetchByPostID(postID int64) (*model.Post, error) {
 }
 
 // HasPost implements PostStorage
-func (p *PostStorageMySQL) HasPost(postID int64) (bool, error) {
+func (p *PostStorageMySQL) HasPost(ctx context.Context, postID int64) (bool, error) {
 	var count int64
 	err := p.db.Model(&model.Post{}).
 		Where("post_id = ?", postID).Count(&count).Error
@@ -54,7 +55,7 @@ func (p *PostStorageMySQL) HasPost(postID int64) (bool, error) {
 }
 
 // List implements PostStorage
-func (p *PostStorageMySQL) List(order string, cursor string, cnt int) (list []*model.Post, newCursor string, err error) {
+func (p *PostStorageMySQL) List(ctx context.Context, order string, cursor string, cnt int) (list []*model.Post, newCursor string, err error) {
 	cnt = funcs.Clip(cnt, 1, conf.Global.App.MaxPageSize)
 	lastID, lastTime, err := decomposePageCursor(cursor)
 	if err != nil {
@@ -98,7 +99,7 @@ func (p *PostStorageMySQL) List(order string, cursor string, cnt int) (list []*m
 }
 
 // IncrementReplyNum implements PostStorage
-func (p *PostStorageMySQL) IncrementReplyNum(postID int64, incr int) error {
+func (p *PostStorageMySQL) IncrementReplyNum(ctx context.Context, postID int64, incr int) error {
 	now := time.Now()
 	err := p.db.Model(&model.Post{}).Where("post_id = ?", postID).
 		Updates(map[string]interface{}{

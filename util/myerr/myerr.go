@@ -29,6 +29,7 @@ var (
 	ErrUserNotFound     = newError("3002", "该用户不存在")
 	ErrResourceNotFound = newError("3003", "该资源不存在")
 	ErrNoMoreEntry      = newError("3004", "没有更多数据了")
+	ErrTimeout          = newError("3005", "请求超时")
 )
 
 func (e *MyError) Error() string {
