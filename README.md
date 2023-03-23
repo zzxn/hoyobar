@@ -1,5 +1,23 @@
 # HoYoBar
 
+## 本地测试环境搭建
+
+在Docker中运行Redis和MySQL
+
+```bash
+docker run -itd --name redis-test -p 6379:6379 redis
+docker run -itd --name mysql-test -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password mysql
+```
+
+在MySQL容器中创建数据库：
+
+```
+mysql -u root -p 
+password
+
+mysql> CREATE DATABASE `hoyobar_test`;
+```
+
 ## 运行方式
 
 ```bash
