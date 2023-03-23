@@ -1,10 +1,8 @@
-package crypt
+package myhash
 
 import (
 	"golang.org/x/crypto/bcrypt"
 )
-
-// TODO: test it
 
 func HashPassword(password string) (string, error) {
 	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

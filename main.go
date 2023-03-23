@@ -7,20 +7,25 @@ import (
 	"hoyobar/middleware"
 	"hoyobar/model"
 	"hoyobar/service"
+	"hoyobar/storage"
 	"hoyobar/util/idgen"
 	"hoyobar/util/mycache"
 	"hoyobar/util/myerr"
 	"log"
+	"math/rand"
 	"os"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 func main() {
+	rand.Seed(time.Now().Unix())
 	startApp(readConfig())
 }
 
@@ -33,7 +38,7 @@ func readConfig() conf.Config {
 	}
 	config := conf.FromYAML(r)
 	conf.Global = &config
-	fmt.Printf("config: %#v", config)
+	fmt.Printf("config: %#v\n", config)
 	return config
 }
 
@@ -41,9 +46,11 @@ func startApp(config conf.Config) {
 	idgen.Init("2020-01-01", 0)
 
 	db := initDB(config)
-	model.Init(db)
+	if conf.Global.DB.AutoMigrate {
+		model.Migrate(db)
+	}
 
-	cache := mycache.NewMemoryCache()
+	cache := initCache(config)
 
 	r := gin.Default()
 	r.Use(cors.Default())
@@ -55,8 +62,12 @@ func startApp(config conf.Config) {
 		postHandler handler.Handler
 	)
 
+	userStorage := storage.NewUserStorageMySQL(db)
+	postStorage := storage.NewPostStorageMySQL(db)
+	replyStorage := storage.NewPostReplyStorageMySQL(db)
+
 	// user API
-	userService := service.NewUserService(cache)
+	userService := service.NewUserService(cache, userStorage)
 	api.Use(middleware.ReadAuthToken(func(authToken string, c *gin.Context) {
 		userID, err := userService.AuthTokenToUserID(authToken)
 		if err != nil {
@@ -74,7 +85,7 @@ func startApp(config conf.Config) {
 	userHandler.AddRoute(api.Group("/user"))
 
 	// post API
-	postService := service.NewPostService(cache)
+	postService := service.NewPostService(cache, userStorage, postStorage, replyStorage)
 	postHandler = &handler.PostHandler{
 		PostService: postService,
 		UserService: userService,
@@ -117,4 +128,13 @@ func initDB(config conf.Config) *gorm.DB {
 		log.Fatalln("not recoginize db type:", config.DB.Type)
 	}
 	return db
+}
+
+func initCache(config conf.Config) mycache.Cache {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     conf.Global.Redis.Addr,
+		Username: conf.Global.Redis.Username,
+		Password: conf.Global.Redis.Password,
+	})
+	return mycache.NewRedisCache(rdb)
 }

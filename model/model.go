@@ -8,8 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var DB *gorm.DB
-
 // Base type for model.
 // time.Time should be parsed into:
 // - mysql: DATETIME(3), see: https://github.com/go-gorm/mysql/blob/master/mysql.go#L401
@@ -22,23 +20,10 @@ type Model struct {
 	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
-func Init(db *gorm.DB) {
-	if conf.Global == nil {
-		panic("conf.Global is nil")
-	}
-	if db == nil {
-		panic("db is nil")
-	}
-	DB = db
-	if conf.Global.DB.AutoMigrate {
-		migrate(DB)
-	}
-}
-
-func migrate(db *gorm.DB) {
+func Migrate(db *gorm.DB) {
 	// TODO: do we need to do this?
 	var err error
-	err = db.Debug().AutoMigrate(
+	err = db.AutoMigrate(
 		&Post{},
 		&PostReply{},
 	)
@@ -57,7 +42,7 @@ func migrate(db *gorm.DB) {
 func autoMigrateShard(db *gorm.DB, shardN int, model interface{ TableName() string }) {
 	tableName := model.TableName()
 	for i := 0; i < shardN; i++ {
-		err := db.Debug().Table(tableName + strconv.Itoa(i)).AutoMigrate(&model)
+		err := db.Table(tableName + strconv.Itoa(i)).AutoMigrate(&model)
 		if err != nil {
 			panic(err)
 		}

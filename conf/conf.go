@@ -31,16 +31,27 @@ type Config struct {
 		AutoMigrate bool `yaml:"auto_migrate"`
 	} `yaml:"db"`
 
+	Redis struct {
+		Addr     string `yaml:"addr"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		DB       int    `yaml:"db"`
+	} `yaml:"redis"`
+
 	Sharding struct {
 		UserShardN int `yaml:"user_shard_n"`
 	} `yaml:"sharding"`
 
 	App struct {
-		Port              string        `yaml:"port"`
-		AuthTokenExpire   time.Duration `yaml:"auth_token_expire"`
-		CheckUserIsAuthor bool          `yaml:"check_user_is_author"`
-		DefaultPageSize   int           `yaml:"default_page_size"`
-		MaxPageSize       int           `yaml:"max_page_size"`
+		Port              string `yaml:"port"`
+		CheckUserIsAuthor bool   `yaml:"check_user_is_author"`
+		DefaultPageSize   int    `yaml:"default_page_size"`
+		MaxPageSize       int    `yaml:"max_page_size"`
+		Expire            struct {
+			AuthToken time.Duration `yaml:"auth_token_expire"`
+			UserInfo  time.Duration `yaml:"user_info"`
+			PostInfo  time.Duration `yaml:"post_info"`
+		} `yaml:"expire"`
 	} `yaml:"app"`
 }
 

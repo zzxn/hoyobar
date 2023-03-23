@@ -2,9 +2,8 @@ package model
 
 import (
 	"database/sql"
-	"fmt"
 	"hoyobar/conf"
-	"hoyobar/util/regexes"
+	"hoyobar/util/myhash"
 	"strconv"
 
 	"gorm.io/gorm"
@@ -25,18 +24,8 @@ func (User) TableName() string {
 
 func TableOfUser(user *User, userID int64) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		shardIdx := userID % int64(conf.Global.Sharding.UserShardN)
+		shardIdx := myhash.HashSnowflakeID(userID, int64(conf.Global.Sharding.UserShardN))
 		tableName := user.TableName() + strconv.FormatInt(shardIdx, 10)
 		return db.Table(tableName)
 	}
-}
-
-func UsernameField(username string) (string, error) {
-	if regexes.Email.MatchString(username) {
-		return "email", nil
-	}
-	if regexes.Phone.MatchString(username) {
-		return "phone", nil
-	}
-	return "", fmt.Errorf("%v is not a valid username", username)
 }

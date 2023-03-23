@@ -2,7 +2,7 @@ package model
 
 import (
 	"hoyobar/conf"
-	"hoyobar/util/crypt"
+	"hoyobar/util/myhash"
 	"strconv"
 
 	"gorm.io/gorm"
@@ -20,7 +20,7 @@ func (UserNickname) TableName() string {
 
 func TableOfUserNickname(userNickname *UserNickname, nickname string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		shardIdx := crypt.HashString(nickname, int64(conf.Global.Sharding.UserShardN))
+		shardIdx := myhash.HashString(nickname, int64(conf.Global.Sharding.UserShardN))
 		tableName := userNickname.TableName() + strconv.FormatInt(shardIdx, 10)
 		return db.Table(tableName)
 	}
