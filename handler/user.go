@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"hoyobar/service"
 	"hoyobar/util/myerr"
@@ -16,13 +15,13 @@ type UserHandler struct {
 }
 
 func (u *UserHandler) AddRoute(r *gin.RouterGroup) {
-	r.POST("/test", makeHandlerFunc(u.CheckOnline))
-	r.POST("/verify", makeHandlerFunc(u.VerifyAccount))
-	r.POST("/register", makeHandlerFunc(u.Register))
-	r.POST("/login", makeHandlerFunc(u.Login))
+	r.POST("/test", gin.HandlerFunc(u.CheckOnline))
+	r.POST("/verify", gin.HandlerFunc(u.VerifyAccount))
+	r.POST("/register", gin.HandlerFunc(u.Register))
+	r.POST("/login", gin.HandlerFunc(u.Login))
 }
 
-func (u *UserHandler) CheckOnline(ctx context.Context, c *gin.Context) {
+func (u *UserHandler) CheckOnline(c *gin.Context) {
 	value := c.Value("user_id")
 	if value == nil {
 		c.Error(myerr.ErrNotLogin) //nolint:errcheck
@@ -31,13 +30,13 @@ func (u *UserHandler) CheckOnline(ctx context.Context, c *gin.Context) {
 	c.JSON(http.StatusOK, fmt.Sprintf("you are online: %T(%v)", value, value))
 }
 
-func (u *UserHandler) VerifyAccount(ctx context.Context, c *gin.Context) {
+func (u *UserHandler) VerifyAccount(c *gin.Context) {
 	req := &AccountVerifyReq{}
 	if failBindJSON(c, req) {
 		return
 	}
 
-	if err := u.UserService.Verify(ctx, req.Username); err != nil {
+	if err := u.UserService.Verify(c, req.Username); err != nil {
 		c.Error(err) //nolint:errcheck
 	}
 
@@ -47,13 +46,13 @@ func (u *UserHandler) VerifyAccount(ctx context.Context, c *gin.Context) {
 	})
 }
 
-func (u *UserHandler) Register(ctx context.Context, c *gin.Context) {
+func (u *UserHandler) Register(c *gin.Context) {
 	req := &UserRegisterReq{}
 	if failBindJSON(c, req) {
 		return
 	}
 
-	userBasic, err := u.UserService.Register(ctx, &service.RegisterInfo{
+	userBasic, err := u.UserService.Register(c, &service.RegisterInfo{
 		Username: req.Username,
 		Password: req.Password,
 		Nickname: req.Nickname,
@@ -72,12 +71,12 @@ func (u *UserHandler) Register(ctx context.Context, c *gin.Context) {
 	})
 }
 
-func (u *UserHandler) Login(ctx context.Context, c *gin.Context) {
+func (u *UserHandler) Login(c *gin.Context) {
 	req := &UserLoginReq{}
 	if failBindJSON(c, req) {
 		return
 	}
-	userBasic, err := u.UserService.Login(ctx, req.Username, req.Password)
+	userBasic, err := u.UserService.Login(c, req.Username, req.Password)
 	if err != nil {
 		c.Error(err) // nolint:errcheck
 		return

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"hoyobar/conf"
 	"hoyobar/handler"
@@ -55,10 +54,14 @@ func startApp(config conf.Config) {
 	cache := initCache(config)
 
 	r := gin.Default()
+	r.ContextWithFallback = true
 	// pprof.Register(r)
 	r.Use(cors.Default())
 	api := r.Group("/api")
-	api.Use(middleware.ErrorHandler())
+	api.Use(
+		middleware.ErrorHandler(),
+		middleware.Timeout(conf.Global.App.Timeout.Default),
+	)
 
 	var (
 		userHandler handler.Handler
@@ -72,13 +75,13 @@ func startApp(config conf.Config) {
 	// user API
 	userService := service.NewUserService(cache, userStorage)
 	api.Use(middleware.ReadAuthToken(func(authToken string, c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), config.App.Timeout.Default)
-		defer cancel()
-		userID, err := userService.AuthTokenToUserID(ctx, authToken)
+		log.Println("found auth token, checking user")
+		userID, err := userService.AuthTokenToUserID(c, authToken)
 		// check timeout
 		select {
-		case <-ctx.Done():
-			c.Error(myerr.ErrTimeout.WithCause(ctx.Err())) // nolint:errcheck
+		case <-c.Done():
+			log.Println("timeout during check user auth token")
+			c.Error(myerr.ErrTimeout.WithCause(c.Err())) // nolint:errcheck
 			c.Abort()
 			return
 		default: // do nothing
