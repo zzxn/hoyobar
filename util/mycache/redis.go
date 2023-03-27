@@ -34,6 +34,16 @@ func (r *RedisCache) Get(ctx context.Context, key string) (string, error) {
 	return res, err
 }
 
+// Multi get
+func (r *RedisCache) MGet(ctx context.Context, keys ...string) ([]interface{}, error) {
+	res, err := r.rdb.MGet(ctx, keys...).Result()
+	err = errors.Wrapf(err, "fail to mget %v from redis", keys)
+	if err != nil {
+		log.Println(err)
+	}
+	return res, err
+}
+
 // Set implements Cache
 func (r *RedisCache) Set(ctx context.Context, key string, value string, d time.Duration) error {
 	err := r.rdb.Set(ctx, key, value, d).Err()
@@ -70,7 +80,7 @@ func (r *RedisCache) SetInt64(ctx context.Context, key string, value int64, d ti
 	err := r.rdb.Set(ctx, key, value, d).Err()
 	err = errors.Wrapf(err, "fail to set int64 with key %v", key)
 	if err != nil {
-		log.Println(err)
+		log.Printf("cache fail to set int64, err=%v", err)
 	}
 	return err
 }

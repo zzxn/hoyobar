@@ -68,7 +68,6 @@ type ReplyList struct {
 }
 
 func (p *PostService) Create(ctx context.Context, authorID int64, title string, content string) (postID int64, err error) {
-	// TODO: check authentication and authority
 	postID = idgen.New()
 	postM := model.Post{
 		PostID:    postID,

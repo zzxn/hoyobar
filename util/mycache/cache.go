@@ -10,6 +10,7 @@ import (
 type Cache interface {
 	Set(ctx context.Context, key string, value string, d time.Duration) error
 	Get(ctx context.Context, key string) (string, error)
+	MGet(ctx context.Context, keys ...string) ([]interface{}, error)
 	SetInt64(ctx context.Context, key string, value int64, d time.Duration) error
 	GetInt64(ctx context.Context, key string) (int64, error)
 }
