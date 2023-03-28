@@ -18,6 +18,22 @@ password
 mysql> CREATE DATABASE `hoyobar_test`;
 ```
 
+## 本地集成测试
+
+集成测试测试以下功能：
+- 注册
+- 登录
+- 发帖
+- 列出帖子列表
+- 回帖
+- 列出回帖列表
+
+方法：
+- 确保本地测试环境已配置好，且数据均已清空
+- 运行服务 `go run main.go` 等待启动成功
+- 运行集成测试，`python3 ./script/test.py`
+    - 需要 `pip3 install grequests`
+
 ## 运行方式
 
 ```bash
