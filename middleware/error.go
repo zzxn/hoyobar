@@ -11,7 +11,8 @@ import (
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
-		for _, e := range c.Errors {
+		if len(c.Errors) > 0 {
+			e := c.Errors[0]
 			err := e.Err
 			if myErr, ok := err.(*myerr.MyError); ok {
 				log.Printf("error: %v, cause: %v\n", myErr, myErr.Cause())
@@ -26,8 +27,6 @@ func ErrorHandler() gin.HandlerFunc {
 					"emsg":  myerr.ErrUnknown.Emsg,
 				})
 			}
-			return
 		}
-
 	}
 }

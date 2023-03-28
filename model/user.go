@@ -14,8 +14,8 @@ type User struct {
 	UserID   int64          `gorm:"uniqueIndex"`
 	Email    sql.NullString `gorm:"size:320"`
 	Phone    sql.NullString `gorm:"size:30"`
-	Nickname string
-	Password string
+	Nickname string         `gorm:"size:50"`
+	Password string         `gorm:"size:100"`
 }
 
 func (User) TableName() string {

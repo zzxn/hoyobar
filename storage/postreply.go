@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"hoyobar/conf"
 	"hoyobar/model"
 	"hoyobar/util/funcs"
@@ -22,7 +23,7 @@ func NewPostReplyStorageMySQL(db *gorm.DB) *PostReplyStorageMySQL {
 }
 
 // Create implements PostReplyStorage
-func (p *PostReplyStorageMySQL) Create(reply *model.PostReply) error {
+func (p *PostReplyStorageMySQL) Create(ctx context.Context, reply *model.PostReply) error {
 	err := p.db.Model(reply).Create(reply).Error
 	if err != nil {
 		return errors.Wrapf(err, "fail to create post reply")
@@ -31,7 +32,7 @@ func (p *PostReplyStorageMySQL) Create(reply *model.PostReply) error {
 }
 
 // List implements PostReplyStorage
-func (p *PostReplyStorageMySQL) List(postID int64, order string, cursor string, cnt int) (list []*model.PostReply, newCursor string, err error) {
+func (p *PostReplyStorageMySQL) List(ctx context.Context, postID int64, order string, cursor string, cnt int) (list []*model.PostReply, newCursor string, err error) {
 	cnt = funcs.Clip(cnt, 1, conf.Global.App.MaxPageSize)
 	lastID, lastTime, err := decomposePageCursor(cursor)
 	if err != nil {

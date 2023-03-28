@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-contrib/cors"
+	// "github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
@@ -53,9 +54,14 @@ func startApp(config conf.Config) {
 	cache := initCache(config)
 
 	r := gin.Default()
+	r.ContextWithFallback = true
+	// pprof.Register(r)
 	r.Use(cors.Default())
 	api := r.Group("/api")
-	api.Use(middleware.ErrorHandler())
+	api.Use(
+		middleware.ErrorHandler(),
+		middleware.Timeout(conf.Global.App.Timeout.Default),
+	)
 
 	var (
 		userHandler handler.Handler
@@ -69,7 +75,17 @@ func startApp(config conf.Config) {
 	// user API
 	userService := service.NewUserService(cache, userStorage)
 	api.Use(middleware.ReadAuthToken(func(authToken string, c *gin.Context) {
-		userID, err := userService.AuthTokenToUserID(authToken)
+		log.Println("found auth token, checking user")
+		userID, err := userService.AuthTokenToUserID(c, authToken)
+		// check timeout
+		select {
+		case <-c.Done():
+			log.Println("timeout during check user auth token")
+			c.Error(myerr.ErrTimeout.WithCause(c.Err())) // nolint:errcheck
+			c.Abort()
+			return
+		default: // do nothing
+		}
 		if err != nil {
 			if e, ok := err.(*myerr.MyError); ok {
 				log.Println("fails to read user ID from auth token, cause:", e.Cause())
@@ -92,7 +108,10 @@ func startApp(config conf.Config) {
 	}
 	postHandler.AddRoute(api.Group("/post"))
 
-	r.Run(fmt.Sprintf(":%v", config.App.Port))
+	err := r.Run(fmt.Sprintf(":%v", config.App.Port))
+	if err != nil {
+		log.Fatalf("app exit with err: %v\n", err)
+	}
 }
 
 func initSqlite3(config conf.Config) *gorm.DB {

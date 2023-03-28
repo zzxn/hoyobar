@@ -52,6 +52,10 @@ type Config struct {
 			UserInfo  time.Duration `yaml:"user_info"`
 			PostInfo  time.Duration `yaml:"post_info"`
 		} `yaml:"expire"`
+		Timeout struct {
+			Default time.Duration `yaml:"default"`
+		} `yaml:"timeout"`
+		BcrytpCost int `yaml:"bcrypt_cost"`
 	} `yaml:"app"`
 }
 
@@ -65,5 +69,14 @@ func FromYAML(r io.Reader) Config {
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		log.Fatalf("fails to unmarshal config from yaml: %v\n", err)
 	}
+	assigneDefaults(&config)
 	return config
+}
+
+func assigneDefaults(config *Config) {
+	if config.App.Timeout.Default <= 0 {
+		// default timeout is 1 min
+		config.App.Timeout.Default = time.Minute
+		log.Println("Use default timeout: 1 min")
+	}
 }

@@ -26,3 +26,6 @@ app:
     auth_token: 10h
     user_info: 360h # 15 days
     post_info: 168h # 10 days
+  timeout:
+    default: 10s
+  bcrypt_cost: 4 # +1 will make time cost x2 (set to 10 in production)

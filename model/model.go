@@ -22,8 +22,7 @@ type Model struct {
 
 func Migrate(db *gorm.DB) {
 	// TODO: do we need to do this?
-	var err error
-	err = db.AutoMigrate(
+	err := db.AutoMigrate(
 		&Post{},
 		&PostReply{},
 	)
