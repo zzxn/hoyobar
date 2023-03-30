@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"hoyobar/conf"
 	"hoyobar/model"
 	"hoyobar/storage"
@@ -10,8 +11,11 @@ import (
 	"hoyobar/util/mycache"
 	"hoyobar/util/myerr"
 	"log"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 type PostService struct {
@@ -116,6 +120,19 @@ func (p *PostService) List(ctx context.Context, order string, cursor string, pag
 		return nil, myerr.ErrBadReqBody.WithEmsg("页为空")
 	}
 	pageSize = funcs.Min(pageSize, conf.Global.App.MaxPageSize)
+
+	if list, err = p.listByCache(ctx, order, cursor, pageSize); err != nil {
+		// we are done, shortage of number is possible, but it's ok
+		if len(list.List) >= pageSize {
+			return list, nil
+		}
+		log.Printf("we don't query enough posts list cache, expect %v, got %v", pageSize, len(list.List))
+	} else {
+		log.Printf("fail to query post list in cache, order=%v, cursor=%v, pageSize=%v", order, cursor, pageSize)
+	}
+
+	// we don't get enough items from cache or fail to get items from cache.
+	// try regular database.
 	postMs, newCursor, err := p.postStorage.List(ctx, order, cursor, pageSize)
 	if err != nil {
 		return nil, myerr.OtherErrWarpf(err, "fail to query posts")
@@ -136,6 +153,87 @@ func (p *PostService) List(ctx context.Context, order string, cursor string, pag
 		})
 	}
 	return list, nil
+}
+
+// returned error need to be wrapped
+func (p *PostService) listByCache(ctx context.Context, order string, cursor string, pageSize int) (list *PostList, err error) {
+	// TODO: 新建和回复时将其添加到cache
+
+	tos, ok := p.cache.(mycache.TimeOrderedSetCache)
+	if !ok {
+		return nil, errors.Errorf("current cache not support TimeOrderedSetCache interface")
+	}
+
+	lastID, lastTime, err := storage.DecomposePageCursor(cursor)
+	if err != nil {
+		return nil, errors.Wrapf(err, "wrong cursor: %v", cursor)
+	}
+	lastIDStr := fmt.Sprintf("%019d", lastID)
+
+	tosItems, err := tos.TOSFetch(ctx, "post_list_order_by_"+order, lastTime, lastIDStr, pageSize)
+	if err != nil {
+		return nil, errors.Wrapf(err, "fail to query post list from cache")
+	}
+
+	// extract postIDs, then map them into PostDetail
+	postIDs := make([]int64, len(tosItems))
+	for i, t := range tosItems {
+		postID, err := strconv.ParseInt(t.Value, 10, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, "fail to parse tos item value, expect int64, got %v", t.Value)
+		}
+		postIDs[i] = postID
+	}
+	postDetails, err := p.mapIDToDetail(postIDs)
+	if err != nil {
+		return nil, errors.Wrap(err, "fail to map post id to detail")
+	}
+
+	// compose new cursor
+	var newCursor string
+	n := len(postDetails)
+	switch order {
+	case storage.PostOrderCreateTimeDesc:
+		newCursor = storage.ComposePageCursor(postDetails[n-1].PostID, postDetails[n-1].CreatedTime)
+	case storage.PostOrderReplyTimeDesc:
+		newCursor = storage.ComposePageCursor(postDetails[n-1].PostID, postDetails[n-1].ReplyTime)
+		for i := 0; i < n; i++ {
+			postDetails[i].ReplyTime = tosItems[i].T.Local()
+		}
+	}
+
+	postDetails = p.fillAuthorNickname(postDetails)
+	return &PostList{
+		List:   postDetails,
+		Cursor: newCursor,
+	}, nil
+}
+
+// all values in list will be non-nil, fail map one, fail all
+// minor error will be ignored, such as fail map author id to author nickname
+func (p *PostService) mapIDToDetail(postIDs []int64) ([]PostDetail, error) {
+	// TODO: implement it
+	list := make([]PostDetail, len(postIDs))
+	for i, postID := range postIDs {
+		list[i] = PostDetail{
+			PostID:         postID,
+			AuthorID:       -1,
+			AuthorNickname: "[TODO]",
+			Title:          "[TODO]",
+			Content:        "[TODO]",
+			CreatedTime:    time.Time{},
+			ReplyTime:      time.Time{},
+			ReplyNum:       -1,
+		}
+	}
+	list = p.fillAuthorNickname(list)
+	return list, nil
+}
+
+// ignore fails
+func (p *PostService) fillAuthorNickname(details []PostDetail) []PostDetail {
+	// TODO: implement it
+	return details
 }
 
 func (p *PostService) Reply(ctx context.Context, authorID int64, postID int64, content string) (replyID int64, err error) {

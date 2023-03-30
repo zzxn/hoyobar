@@ -43,6 +43,12 @@ func (p *PostStorageMySQL) FetchByPostID(ctx context.Context, postID int64) (*mo
 	return &postM, nil
 }
 
+// BatchFetchByPostIDs implements PostStorage
+func (*PostStorageMySQL) BatchFetchByPostIDs(ctx context.Context, postIDs []int64) ([]*model.Post, error) {
+	// TODO
+	panic("unimplemented")
+}
+
 // HasPost implements PostStorage
 func (p *PostStorageMySQL) HasPost(ctx context.Context, postID int64) (bool, error) {
 	var count int64
@@ -57,7 +63,7 @@ func (p *PostStorageMySQL) HasPost(ctx context.Context, postID int64) (bool, err
 // List implements PostStorage
 func (p *PostStorageMySQL) List(ctx context.Context, order string, cursor string, cnt int) (list []*model.Post, newCursor string, err error) {
 	cnt = funcs.Clip(cnt, 1, conf.Global.App.MaxPageSize)
-	lastID, lastTime, err := decomposePageCursor(cursor)
+	lastID, lastTime, err := DecomposePageCursor(cursor)
 	if err != nil {
 		return nil, "", errors.Wrapf(err, "wrong cursor: %v", cursor)
 	}
@@ -89,9 +95,9 @@ func (p *PostStorageMySQL) List(ctx context.Context, order string, cursor string
 	n := len(list)
 	switch order {
 	case PostOrderCreateTimeDesc:
-		newCursor = composePageCursor(list[n-1].PostID, list[n-1].CreatedAt)
+		newCursor = ComposePageCursor(list[n-1].PostID, list[n-1].CreatedAt)
 	case PostOrderReplyTimeDesc:
-		newCursor = composePageCursor(list[n-1].PostID, list[n-1].ReplyTime)
+		newCursor = ComposePageCursor(list[n-1].PostID, list[n-1].ReplyTime)
 	default:
 		return nil, "", errors.Errorf("unsupported post list order (2): %v", order)
 	}

@@ -21,6 +21,7 @@ type TOSItem struct {
 }
 
 type TimeOrderedSetCache interface {
+	Cache
 	// Add (t, key, value) to the TOS with given name.
 	// Remove the item with the largest (time, key) pair
 	// if the size of this TOS exceeds maxSize.

@@ -34,6 +34,12 @@ func (u *UserStorageMySQL) FetchByUserID(ctx context.Context, userID int64) (*mo
 	return &userModel, nil
 }
 
+// BatchFetchByUserIDs implements UserStorage
+func (*UserStorageMySQL) BatchFetchByUserIDs(ctx context.Context, userIDs []int64) ([]*model.User, error) {
+	// TODO
+	panic("unimplemented")
+}
+
 // HasUser implements UserStorage
 func (u *UserStorageMySQL) HasUser(ctx context.Context, userID int64) (bool, error) {
 	var count int64

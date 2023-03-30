@@ -10,7 +10,7 @@ import (
 
 var pageCursorTimeFormat = "2006-01-02-15-04-05.000" // pricision: ms
 
-func decomposePageCursor(cursor string) (ID int64, t time.Time, err error) {
+func DecomposePageCursor(cursor string) (ID int64, t time.Time, err error) {
 	if cursor == "" {
 		return math.MaxInt64, time.Now(), nil
 	}
@@ -37,7 +37,7 @@ func decomposePageCursor(cursor string) (ID int64, t time.Time, err error) {
 }
 
 // compose cursor, the dict order of cursor is same as the order of tuple (t, ID)
-func composePageCursor(ID int64, t time.Time) (cursor string) {
+func ComposePageCursor(ID int64, t time.Time) (cursor string) {
 	cursor = fmt.Sprintf("%v_%v", t.UTC().Format(pageCursorTimeFormat), ID) // UTC
 	return cursor
 }
