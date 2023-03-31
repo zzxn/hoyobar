@@ -57,6 +57,7 @@ type Config struct {
 		} `yaml:"timeout"`
 		BcrytpCost              int `yaml:"bcrypt_cost"`
 		PostPaginationCacheSize int `yaml:"post_pagination_cache_size"`
+		BatchFetchNWorker       int `yaml:"batch_fetch_n_worker"`
 	} `yaml:"app"`
 }
 

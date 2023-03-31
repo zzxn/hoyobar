@@ -231,7 +231,7 @@ func (p *PostService) listByCache(ctx context.Context, order string, cursor stri
 		}
 	}
 
-	postDetails = p.fillAuthorNickname(postDetails)
+	postDetails = p.fillAuthorNickname(ctx, postDetails)
 	return &PostList{
 		List:   postDetails,
 		Cursor: newCursor,
@@ -248,20 +248,14 @@ func (p *PostService) mapIDToDetail(ctx context.Context, postIDs []int64) ([]Pos
 	if err != nil {
 		return nil, errors.Wrapf(err, "fail to query posts")
 	}
-	if len(postMs) != len(postIDs) {
-		log.Println("mapIDToDetail() got postMs", len(postMs), "expect", len(postIDs))
-		return nil, errors.Errorf("fails map same numbers of IDs to postDetails")
-	}
-
-	// record the original order of postIDs
-	postIDToIndex := make(map[int64]int)
-	for i, v := range postIDs {
-		postIDToIndex[v] = i
-	}
 
 	list := make([]PostDetail, len(postIDs))
-	for _, post := range postMs {
-		list[postIDToIndex[post.PostID]] = PostDetail{
+	for i, post := range postMs {
+		if post == nil {
+			list[i].Title = "[已删除]"
+			continue
+		}
+		list[i] = PostDetail{
 			PostID:      post.PostID,
 			AuthorID:    post.AuthorID,
 			Title:       post.Title,
@@ -271,13 +265,24 @@ func (p *PostService) mapIDToDetail(ctx context.Context, postIDs []int64) ([]Pos
 			ReplyNum:    post.ReplyNum,
 		}
 	}
-	list = p.fillAuthorNickname(list)
+	list = p.fillAuthorNickname(ctx, list)
 	return list, nil
 }
 
 // ignore fails
-func (p *PostService) fillAuthorNickname(details []PostDetail) []PostDetail {
-	// TODO: implement it
+func (p *PostService) fillAuthorNickname(ctx context.Context, details []PostDetail) []PostDetail {
+	authorIDs := make([]int64, 0, len(details))
+	for _, pd := range details {
+		authorIDs = append(authorIDs, pd.AuthorID)
+	}
+	authors, err := p.userStorage.BatchFetchByUserIDs(ctx, authorIDs, []string{"nickname"})
+	if err != nil {
+		log.Printf("fail to fill author nicknames of posts: %v\n", err)
+		return details
+	}
+	for i, author := range authors {
+		details[i].AuthorNickname = author.Nickname
+	}
 	return details
 }
 

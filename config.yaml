@@ -30,3 +30,4 @@ app:
     default: 10s
   bcrypt_cost: 4 # +1 will make time cost x2 (set to 10 in production)
   post_pagination_cache_size: 100000 # cache how many posts to paginate
+  batch_fetch_n_worker: 4

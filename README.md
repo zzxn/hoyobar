@@ -18,6 +18,12 @@ password
 mysql> CREATE DATABASE `hoyobar_test`;
 ```
 
+确保MySQL的最大连接数是足够的（1000以上）
+
+```
+mysql> set global max_connections = 1000;
+```
+
 ## 本地集成测试
 
 集成测试测试以下功能：

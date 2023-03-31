@@ -45,10 +45,36 @@ func (p *PostStorageMySQL) FetchByPostID(ctx context.Context, postID int64) (*mo
 
 // BatchFetchByPostIDs implements PostStorage
 func (p *PostStorageMySQL) BatchFetchByPostIDs(ctx context.Context, postIDs []int64) ([]*model.Post, error) {
-	list := make([]*model.Post, 0, len(postIDs))
-	err := p.db.Model(&model.Post{}).Where("post_id in ?", postIDs).Find(&list).Error
+	postIDToIndices := make(map[int64][]int)
+	for i, v := range postIDs {
+		postIDToIndices[v] = append(postIDToIndices[v], i)
+	}
+
+	postSet := make([]*model.Post, 0, len(postIDs))
+	err := p.db.Model(&model.Post{}).Where("post_id in ?", postIDs).Find(&postSet).Error
 	if err != nil {
 		return nil, errors.Wrapf(err, "fail to batch query posts with %v", postIDs)
+	}
+
+	list := make([]*model.Post, len(postIDs))
+	for _, post := range postSet {
+		for _, idx := range postIDToIndices[post.PostID] {
+			list[idx] = &model.Post{
+				Model: model.Model{
+					ID:        post.ID,
+					CreatedAt: post.CreatedAt,
+					UpdatedAt: post.UpdatedAt,
+					DeletedAt: post.DeletedAt,
+				},
+				PostID:    post.PostID,
+				CreatedAt: post.CreatedAt,
+				ReplyTime: post.ReplyTime,
+				ReplyNum:  post.ReplyNum,
+				AuthorID:  post.AuthorID,
+				Title:     post.Title,
+				Content:   post.Content,
+			}
+		}
 	}
 	return list, nil
 }
