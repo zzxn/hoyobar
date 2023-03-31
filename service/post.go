@@ -73,7 +73,7 @@ type ReplyList struct {
 
 func (p *PostService) Create(ctx context.Context, authorID int64, title string, content string) (postID int64, err error) {
 	postID = idgen.New()
-	now := time.Now()
+	now := funcs.NowInMs()
 	postM := model.Post{
 		PostID:    postID,
 		AuthorID:  authorID,
@@ -184,10 +184,10 @@ func (p *PostService) listByCache(ctx context.Context, order string, cursor stri
 		return nil, errors.Errorf("current cache not support TimeOrderedSetCache interface")
 	}
 
-    lastID, lastTime, err := storage.DecomposePageCursor(cursor)
-    if err != nil {
-        return nil, errors.Wrapf(err, "wrong cursor: %v", cursor)
-    }
+	lastID, lastTime, err := storage.DecomposePageCursor(cursor)
+	if err != nil {
+		return nil, errors.Wrapf(err, "wrong cursor: %v", cursor)
+	}
 
 	lastIDStr := funcs.FullLeadingZeroItoa(lastID)
 
@@ -315,7 +315,7 @@ func (p *PostService) Reply(ctx context.Context, authorID int64, postID int64, c
 	}
 
 	// update post's reply time
-	replyTime := time.Now()
+	replyTime := funcs.NowInMs()
 	err = p.postStorage.IncrementReplyNum(ctx, postID, 1, replyTime)
 	if err != nil {
 		// minor err, log and ignore
