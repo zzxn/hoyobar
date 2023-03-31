@@ -281,7 +281,9 @@ func (p *PostService) fillAuthorNickname(ctx context.Context, details []PostDeta
 		return details
 	}
 	for i, author := range authors {
-		details[i].AuthorNickname = author.Nickname
+		if author != nil {
+			details[i].AuthorNickname = author.Nickname
+		}
 	}
 	return details
 }
