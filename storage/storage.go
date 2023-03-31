@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"hoyobar/model"
+	"time"
 )
 
 type UserStorage interface {
@@ -30,7 +31,7 @@ type PostStorage interface {
 	BatchFetchByPostIDs(ctx context.Context, postIDs []int64) ([]*model.Post, error)
 	HasPost(ctx context.Context, postID int64) (bool, error)
 	List(ctx context.Context, order string, cursor string, cnt int) (list []*model.Post, newCursor string, err error)
-	IncrementReplyNum(ctx context.Context, postID int64, incr int) error
+	IncrementReplyNum(ctx context.Context, postID int64, incr int, replyTime time.Time) error
 }
 
 type PostReplyStorage interface {

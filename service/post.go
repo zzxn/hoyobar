@@ -2,13 +2,13 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"hoyobar/conf"
 	"hoyobar/model"
 	"hoyobar/storage"
 	"hoyobar/util/funcs"
 	"hoyobar/util/idgen"
 	"hoyobar/util/mycache"
+	"hoyobar/util/mycache/keys"
 	"hoyobar/util/myerr"
 	"log"
 	"strconv"
@@ -73,17 +73,35 @@ type ReplyList struct {
 
 func (p *PostService) Create(ctx context.Context, authorID int64, title string, content string) (postID int64, err error) {
 	postID = idgen.New()
+	now := time.Now()
 	postM := model.Post{
 		PostID:    postID,
 		AuthorID:  authorID,
 		Title:     title,
 		Content:   content,
-		ReplyTime: time.Now(),
-		ReplyNum:  0,
+		ReplyTime: now,
+		CreatedAt: now,
+		Model: model.Model{
+			UpdatedAt: now,
+		},
+		ReplyNum: 0,
 	}
 	err = p.postStorage.Create(ctx, &postM)
 	if err != nil {
 		return 0, myerr.OtherErrWarpf(err, "fail to create post data")
+	}
+
+	// insert into cache zset to accelerate pagination
+	if tos, ok := p.cache.(mycache.TimeOrderedSetCache); ok {
+		name := keys.PostListName(storage.PostOrderCreateTimeDesc)
+		maxSize := conf.Global.App.PostPaginationCacheSize
+		err := tos.TOSAdd(ctx, name, mycache.TOSItem{
+			T:     now,
+			Value: funcs.FullLeadingZeroItoa(postID),
+		}, maxSize)
+		if err != nil {
+			log.Printf("fail to insert created post into cache list, err=%v", err)
+		}
 	}
 	return postID, nil
 }
@@ -121,14 +139,18 @@ func (p *PostService) List(ctx context.Context, order string, cursor string, pag
 	}
 	pageSize = funcs.Min(pageSize, conf.Global.App.MaxPageSize)
 
-	if list, err = p.listByCache(ctx, order, cursor, pageSize); err != nil {
+	list, err = p.listByCache(ctx, order, cursor, pageSize)
+	if err == nil && len(list.List) >= pageSize {
 		// we are done, shortage of number is possible, but it's ok
-		if len(list.List) >= pageSize {
-			return list, nil
-		}
-		log.Printf("we don't query enough posts list cache, expect %v, got %v", pageSize, len(list.List))
-	} else {
-		log.Printf("fail to query post list in cache, order=%v, cursor=%v, pageSize=%v", order, cursor, pageSize)
+		return list, nil
+	}
+	if err == nil && len(list.List) < pageSize {
+		log.Printf("did not query enough posts list cache, expect %v, got %v", pageSize, len(list.List))
+	}
+	if err != nil {
+		log.Printf("fail to query post list in cache, err=%v", err)
+		err = nil // nolint: ineffassign
+		// clear this err
 	}
 
 	// we don't get enough items from cache or fail to get items from cache.
@@ -157,22 +179,29 @@ func (p *PostService) List(ctx context.Context, order string, cursor string, pag
 
 // returned error need to be wrapped
 func (p *PostService) listByCache(ctx context.Context, order string, cursor string, pageSize int) (list *PostList, err error) {
-	// TODO: 新建和回复时将其添加到cache
-
 	tos, ok := p.cache.(mycache.TimeOrderedSetCache)
 	if !ok {
 		return nil, errors.Errorf("current cache not support TimeOrderedSetCache interface")
 	}
 
-	lastID, lastTime, err := storage.DecomposePageCursor(cursor)
-	if err != nil {
-		return nil, errors.Wrapf(err, "wrong cursor: %v", cursor)
-	}
-	lastIDStr := fmt.Sprintf("%019d", lastID)
+    lastID, lastTime, err := storage.DecomposePageCursor(cursor)
+    if err != nil {
+        return nil, errors.Wrapf(err, "wrong cursor: %v", cursor)
+    }
 
-	tosItems, err := tos.TOSFetch(ctx, "post_list_order_by_"+order, lastTime, lastIDStr, pageSize)
+	lastIDStr := funcs.FullLeadingZeroItoa(lastID)
+
+	tosItems, err := tos.TOSFetch(ctx, keys.PostListName(order), lastTime, lastIDStr, pageSize)
 	if err != nil {
 		return nil, errors.Wrapf(err, "fail to query post list from cache")
+	}
+	if len(tosItems) == 0 {
+		log.Printf("not get tos items from cache with order=%v, cursor=%v\n", order, cursor)
+		// return empty list
+		return &PostList{
+			List:   []PostDetail{},
+			Cursor: cursor,
+		}, nil
 	}
 
 	// extract postIDs, then map them into PostDetail
@@ -184,7 +213,7 @@ func (p *PostService) listByCache(ctx context.Context, order string, cursor stri
 		}
 		postIDs[i] = postID
 	}
-	postDetails, err := p.mapIDToDetail(postIDs)
+	postDetails, err := p.mapIDToDetail(ctx, postIDs)
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to map post id to detail")
 	}
@@ -209,21 +238,37 @@ func (p *PostService) listByCache(ctx context.Context, order string, cursor stri
 	}, nil
 }
 
-// all values in list will be non-nil, fail map one, fail all
-// minor error will be ignored, such as fail map author id to author nickname
-func (p *PostService) mapIDToDetail(postIDs []int64) ([]PostDetail, error) {
-	// TODO: implement it
+// mapIDToDetail maps postIDs to postDetails
+//
+// All values in list will be non-nil, fail map one, fail all.
+// Minor error will be ignored, such as fail map author id to author nickname.
+// The order of postIDs will be kept, i.e result[i].PostID == postIDs[i]
+func (p *PostService) mapIDToDetail(ctx context.Context, postIDs []int64) ([]PostDetail, error) {
+	postMs, err := p.postStorage.BatchFetchByPostIDs(ctx, postIDs)
+	if err != nil {
+		return nil, errors.Wrapf(err, "fail to query posts")
+	}
+	if len(postMs) != len(postIDs) {
+		log.Println("mapIDToDetail() got postMs", len(postMs), "expect", len(postIDs))
+		return nil, errors.Errorf("fails map same numbers of IDs to postDetails")
+	}
+
+	// record the original order of postIDs
+	postIDToIndex := make(map[int64]int)
+	for i, v := range postIDs {
+		postIDToIndex[v] = i
+	}
+
 	list := make([]PostDetail, len(postIDs))
-	for i, postID := range postIDs {
-		list[i] = PostDetail{
-			PostID:         postID,
-			AuthorID:       -1,
-			AuthorNickname: "[TODO]",
-			Title:          "[TODO]",
-			Content:        "[TODO]",
-			CreatedTime:    time.Time{},
-			ReplyTime:      time.Time{},
-			ReplyNum:       -1,
+	for _, post := range postMs {
+		list[postIDToIndex[post.PostID]] = PostDetail{
+			PostID:      post.PostID,
+			AuthorID:    post.AuthorID,
+			Title:       post.Title,
+			Content:     post.Content,
+			CreatedTime: post.CreatedAt,
+			ReplyTime:   post.ReplyTime,
+			ReplyNum:    post.ReplyNum,
 		}
 	}
 	list = p.fillAuthorNickname(list)
@@ -270,10 +315,24 @@ func (p *PostService) Reply(ctx context.Context, authorID int64, postID int64, c
 	}
 
 	// update post's reply time
-	err = p.postStorage.IncrementReplyNum(ctx, postID, 1)
+	replyTime := time.Now()
+	err = p.postStorage.IncrementReplyNum(ctx, postID, 1, replyTime)
 	if err != nil {
 		// minor err, log and ignore
 		log.Printf("fails to update reply time, post_id = %v\n", postID)
+	}
+
+	// insert into cache zset to accelerate pagination
+	if tos, ok := p.cache.(mycache.TimeOrderedSetCache); ok {
+		name := keys.PostListName(storage.PostOrderReplyTimeDesc)
+		maxSize := conf.Global.App.PostPaginationCacheSize
+		err := tos.TOSAdd(ctx, name, mycache.TOSItem{
+			T:     replyTime,
+			Value: funcs.FullLeadingZeroItoa(postID),
+		}, maxSize)
+		if err != nil {
+			log.Printf("fail to insert created post into cache list, err=%v", err)
+		}
 	}
 
 	return replyM.ReplyID, nil

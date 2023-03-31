@@ -3,6 +3,7 @@ package mycache
 import (
 	"context"
 	"fmt"
+	"hoyobar/util/funcs"
 	"log"
 	"strconv"
 	"strings"
@@ -115,23 +116,24 @@ func (r *RedisCache) TOSAdd(ctx context.Context, name string, item TOSItem, maxS
 	const luaScript = `
         local zSetName = KEYS[1]
         local hashName = KEYS[2]
-        local maxSize = ARGS[1]
-        local tosTime = ARGS[2]
-        local tosValue = ARGS[3]
+        local maxSize = tonumber(ARGV[1])
+        local tosTime = ARGV[2]
+        local tosValue = ARGV[3]
         local zSetMember = tosTime..'_'..tosValue
         
         -- if current size >= max size, remove one
-        local currSize = redis.call('ZCARD', hashName)
+        local currSize = redis.call('ZCARD', zSetName)
         if( currSize >= maxSize ) then
             local maxItem = redis.call('ZPOPMAX', zSetName)
             local removedZSetMember = maxItem[1]
             -- split it according '_' to get the second part, i.e. tosValue
             local removedTOSValue = string.sub(removedSetMember, 1 + string.find(removedZSetMember, '_'))
-            redis.call('HREM', zSetName, removedTOSValue)
+            redis.call('HREM', hashName, removedTOSValue)
+        end
 
         -- remove old one if exist
         local exist = redis.call('HEXISTS', hashName, tosValue)
-        if( exist ) then
+        if( exist > 0 ) then
             local oldTOSTime = redis.call('HGET', hashName, tosValue)
             redis.call('ZREM', zSetName, oldTOSTime..'_'..tosValue)
         end
@@ -142,7 +144,7 @@ func (r *RedisCache) TOSAdd(ctx context.Context, name string, item TOSItem, maxS
     `
 	zSetName := fmt.Sprintf("{%v}.zset", name)
 	hashName := fmt.Sprintf("{%v}.hash", name)
-	t := fmt.Sprintf("%019d", item.T.UnixMilli()) // int64 has at most 19 digits
+	t := funcs.FullLeadingZeroItoa(item.T.UnixMilli())
 	currSize, err := r.rdb.Eval(ctx, luaScript, []string{zSetName, hashName}, maxSize, t, item.Value).Result()
 	if err != nil {
 		log.Printf("TOSAdd %v fails: %v\n", name, err)
@@ -162,20 +164,24 @@ func (r *RedisCache) TOSFetch(ctx context.Context, name string, tCursor time.Tim
 	}
 
 	// 1. fetch members from zset, member format: tosTimeInUnixMs_tosValue
-	t := fmt.Sprintf("%019d", tCursor.UnixMilli()) // int64 has at most 19 digits
+	t := funcs.FullLeadingZeroItoa(tCursor.UnixMilli())
 	zSetName := fmt.Sprintf("{%v}.zset", name)
-	zSetMemberCursor := fmt.Sprintf("(%v_%v", t, valueCursor)
+	zSetMemberCursor := fmt.Sprintf("(%v_%v", t, valueCursor) // exclusive
+	log.Println("Execute ZREVRANGEBYLEX", zSetName, zSetMemberCursor, "-", "LIMIT", 0, n)
 	members, err := r.rdb.ZRevRangeByLex(ctx, zSetName, &redis.ZRangeBy{
-		Min:   zSetMemberCursor,
-		Count: int64(n),
+		Max:    zSetMemberCursor,
+		Min:    "-",
+		Offset: 0,
+		Count:  int64(n),
 	}).Result()
+	// log.Println("Got members", members)
 	if err != nil {
 		log.Printf("TOSFetch %v fails: %v\n", name, err)
 		return nil, errors.Wrapf(err, "fail to zreverangebylex")
 	}
 
 	// 2. parse member
-	items := []TOSItem{}
+	items := make([]TOSItem, 0, len(members))
 	for _, member := range members {
 		parts := strings.SplitN(member, "_", 2)
 		if len(parts) != 2 {
@@ -191,7 +197,7 @@ func (r *RedisCache) TOSFetch(ctx context.Context, name string, tCursor time.Tim
 			return nil, err
 		}
 		items = append(items, TOSItem{
-			T:     time.Unix(tosTimeMs/1000, tosTimeMs%1000*1000000),
+			T:     time.UnixMilli(tosTimeMs),
 			Value: tosValue,
 		})
 	}

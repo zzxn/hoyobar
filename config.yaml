@@ -19,7 +19,7 @@ app:
   port: 8080
   check_user_is_author: true
   default_page_size: 20
-  max_page_size: 20
+  max_page_size: 10000
   expire:
     # if possible, the real expire will add a random num from (-e*jitter, +e*jitter)
     jitter: 0.0
@@ -29,3 +29,4 @@ app:
   timeout:
     default: 10s
   bcrypt_cost: 4 # +1 will make time cost x2 (set to 10 in production)
+  post_pagination_cache_size: 100000 # cache how many posts to paginate

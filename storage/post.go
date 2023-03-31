@@ -44,9 +44,13 @@ func (p *PostStorageMySQL) FetchByPostID(ctx context.Context, postID int64) (*mo
 }
 
 // BatchFetchByPostIDs implements PostStorage
-func (*PostStorageMySQL) BatchFetchByPostIDs(ctx context.Context, postIDs []int64) ([]*model.Post, error) {
-	// TODO
-	panic("unimplemented")
+func (p *PostStorageMySQL) BatchFetchByPostIDs(ctx context.Context, postIDs []int64) ([]*model.Post, error) {
+	list := make([]*model.Post, 0, len(postIDs))
+	err := p.db.Model(&model.Post{}).Where("post_id in ?", postIDs).Find(&list).Error
+	if err != nil {
+		return nil, errors.Wrapf(err, "fail to batch query posts with %v", postIDs)
+	}
+	return list, nil
 }
 
 // HasPost implements PostStorage
@@ -105,12 +109,13 @@ func (p *PostStorageMySQL) List(ctx context.Context, order string, cursor string
 }
 
 // IncrementReplyNum implements PostStorage
-func (p *PostStorageMySQL) IncrementReplyNum(ctx context.Context, postID int64, incr int) error {
-	now := time.Now()
+func (p *PostStorageMySQL) IncrementReplyNum(
+	ctx context.Context, postID int64, incr int, replyTime time.Time,
+) error {
 	err := p.db.Model(&model.Post{}).Where("post_id = ?", postID).
 		Updates(map[string]interface{}{
-			"reply_time": now,
-			"updated_at": now,
+			"reply_time": replyTime,
+			"updated_at": replyTime,
 			"reply_num":  gorm.Expr("reply_num + ?", incr),
 		}).Error
 	return errors.Wrapf(err, "fails to increment reply num")

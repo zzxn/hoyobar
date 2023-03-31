@@ -55,7 +55,8 @@ type Config struct {
 		Timeout struct {
 			Default time.Duration `yaml:"default"`
 		} `yaml:"timeout"`
-		BcrytpCost int `yaml:"bcrypt_cost"`
+		BcrytpCost              int `yaml:"bcrypt_cost"`
+		PostPaginationCacheSize int `yaml:"post_pagination_cache_size"`
 	} `yaml:"app"`
 }
 
