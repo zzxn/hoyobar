@@ -66,6 +66,8 @@ go run .
 
 [x] 用户表分表
 
-[ ] 利用Redis缓存优化性能
+[x] 利用Redis缓存优化性能
+
     [x] user
-    [ ] post
+
+    [x] post
