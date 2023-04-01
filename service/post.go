@@ -60,10 +60,11 @@ type PostList struct {
 }
 
 type ReplyDetail struct {
-	ReplyID   int64     `json:"reply_id,string"`
-	AuthorID  int64     `json:"author_id,string"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ReplyID        int64     `json:"reply_id,string"`
+	AuthorID       int64     `json:"author_id,string"`
+	AuthorNickname string    `json:"author_nickname"`
+	Content        string    `json:"content"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type ReplyList struct {
@@ -174,6 +175,7 @@ func (p *PostService) List(ctx context.Context, order string, cursor string, pag
 			ReplyNum:    post.ReplyNum,
 		})
 	}
+	list.List = p.fillAuthorNickname(ctx, list.List)
 	return list, nil
 }
 
@@ -378,5 +380,25 @@ func (p *PostService) ListReply(ctx context.Context, postID int64, cursor string
 			CreatedAt: reply.CreatedAt,
 		})
 	}
+	list.List = p.fillReplyAuthorNickname(ctx, list.List)
 	return list, nil
+}
+
+// ignore fails
+func (p *PostService) fillReplyAuthorNickname(ctx context.Context, details []ReplyDetail) []ReplyDetail {
+	authorIDs := make([]int64, 0, len(details))
+	for _, pd := range details {
+		authorIDs = append(authorIDs, pd.AuthorID)
+	}
+	authors, err := p.userStorage.BatchFetchByUserIDs(ctx, authorIDs, []string{"nickname"})
+	if err != nil {
+		log.Printf("fail to fill author nicknames of replies: %v\n", err)
+		return details
+	}
+	for i, author := range authors {
+		if author != nil {
+			details[i].AuthorNickname = author.Nickname
+		}
+	}
+	return details
 }
