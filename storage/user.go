@@ -98,9 +98,9 @@ func (u *UserStorageMySQL) BatchFetchByUserIDs(ctx context.Context, userIDs []in
 		}(i)
 	}
 
-	userIDToIndex := make(map[int64]int, len(userIDs))
+	idToIndices := make(map[int64][]int)
 	for i, v := range userIDs {
-		userIDToIndex[v] = i
+		idToIndices[v] = append(idToIndices[v], i)
 	}
 
 	userMs := make([]*model.User, len(userIDs))
@@ -110,9 +110,11 @@ func (u *UserStorageMySQL) BatchFetchByUserIDs(ctx context.Context, userIDs []in
 			close(cancelChan) // broadcast cancel signal
 			err = errors.Wrapf(err, "fails to batch fetch users")
 			return nil, err
-		case subUserMs := <-resChan:
-			for _, m := range subUserMs {
-				userMs[userIDToIndex[m.UserID]] = m
+		case userSubSet := <-resChan:
+			for _, user := range userSubSet {
+				for _, idx := range idToIndices[user.UserID] {
+					userMs[idx] = copyUserModel(user)
+				}
 			}
 		case <-ctx.Done():
 			return nil, errors.Wrapf(ctx.Err(), "context canceled")
@@ -122,14 +124,28 @@ func (u *UserStorageMySQL) BatchFetchByUserIDs(ctx context.Context, userIDs []in
 	return userMs, nil
 }
 
+func copyUserModel(user *model.User) *model.User {
+	return &model.User{
+		Model: model.Model{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			DeletedAt: user.DeletedAt,
+		},
+		UserID:   user.UserID,
+		Email:    user.Email,
+		Phone:    user.Phone,
+		Nickname: user.Nickname,
+		Password: user.Password,
+	}
+
+}
+
+// returns a set of users (no duplication).
+// if a userID is not found, the user will not be present.
 func (u *UserStorageMySQL) batchFetchByUserIDsInOneTable(
 	ctx context.Context, userIDs []int64, fields []string,
 ) ([]*model.User, error) {
-	idToIndices := make(map[int64][]int)
-	for i, v := range userIDs {
-		idToIndices[v] = append(idToIndices[v], i)
-	}
-
 	userSet := make([]*model.User, 0, len(userIDs))
 	err := u.db.Scopes(model.TableOfUser(userIDs[0])).
 		Select(fields).
@@ -137,26 +153,8 @@ func (u *UserStorageMySQL) batchFetchByUserIDsInOneTable(
 	if err != nil {
 		return nil, err
 	}
+	return userSet, nil
 
-	list := make([]*model.User, len(userIDs))
-	for _, user := range userSet {
-		for _, idx := range idToIndices[user.UserID] {
-			list[idx] = &model.User{
-				Model: model.Model{
-					ID:        user.ID,
-					CreatedAt: user.CreatedAt,
-					UpdatedAt: user.UpdatedAt,
-					DeletedAt: user.DeletedAt,
-				},
-				UserID:   user.UserID,
-				Email:    user.Email,
-				Phone:    user.Phone,
-				Nickname: user.Nickname,
-				Password: user.Password,
-			}
-		}
-	}
-	return list, nil
 }
 
 // HasUser implements UserStorage
