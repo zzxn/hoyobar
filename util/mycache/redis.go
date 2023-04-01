@@ -138,7 +138,7 @@ func (r *RedisCache) TOSAdd(ctx context.Context, name string, item TOSItem, maxS
             redis.call('ZREM', zSetName, oldTOSTime..'_'..tosValue)
         end
 
-        redis.call('HSET', hashName, tosValue, zSetMember)
+        redis.call('HSET', hashName, tosValue, tosTime)
         redis.call('ZADD', zSetName, 0, zSetMember)
         return currSize + 1
     `
