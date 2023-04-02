@@ -117,7 +117,7 @@ func (p *PostService) Detail(ctx context.Context, postID int64) (detail *PostDet
 	}
 	var authorNickname string
 	author, err := p.userStorage.FetchByUserID(ctx, postM.AuthorID)
-	if err != nil && author != nil {
+	if err == nil && author != nil {
 		authorNickname = author.Nickname
 	}
 	return &PostDetail{
