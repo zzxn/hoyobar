@@ -62,39 +62,53 @@ func (u *UserStorageMySQL) BatchFetchByUserIDs(ctx context.Context, userIDs []in
 	for _, userIDs := range tableToUserIDs {
 		taskChan <- userIDs
 	}
-	errChan := make(chan error, nWorker)
-	resChan := make(chan []*model.User, len(tableToUserIDs))
-	cancelChan := make(chan interface{})
+	close(taskChan) // so workers will know taskChan drains
+
+	errChan := make(chan error, nWorker)                     // each worker write at most one err
+	resChan := make(chan []*model.User, len(tableToUserIDs)) // collect result
+	cancelChan := make(chan interface{})                     // close it to broadcast cancel signal
 	for i := 0; i < nWorker; i++ {
 		go func(workerID int) {
+			defer log.Printf("BatchFetchByUserIDs worker %v exit\n", workerID)
 			defer func() {
 				if err := recover(); err != nil {
 					log.Printf("BatchFetchByUserIDs worker %v panic %v\n", workerID, err)
 					log.Printf("BatchFetchByUserIDs worker %v panic stack %v\n", workerID, debug.Stack())
-					errChan <- errors.Errorf("worker %v panic", workerID)
+					errChan <- errors.Errorf("worker %v panic", workerID) // tell the other err
 				}
 			}()
+
+			// three possible exit points:
+			// 1. receive cancel signal from closed cancelChan
+			// 2. task chan drains
+			// 3. error occurs
 			for {
+				// try read cancelChan
 				select {
 				case <-cancelChan:
-					log.Printf("BatchFetchByUserIDs worker %v canceled", workerID)
+					log.Printf("BatchFetchByUserIDs worker %v canceled\n", workerID)
+					// exit point 1/3: canceled by caller
 					break
 				default: // do nothing
 				}
+
 				userIDs, ok := <-taskChan
 				if !ok {
+					// exit point 2/3: task chan drains
 					break
 				}
+
 				// must: len(userIDs) > 0
 				userMs, err := u.batchFetchByUserIDsInOneTable(ctx, userIDs, fields)
 				if err != nil {
 					log.Printf("BatchFetchByUserIDs worker %v got err: %v\n", workerID, err)
-					errChan <- err
+					errChan <- err // tell the others err
+					// exit point 3/3: error occurs
 					break
 				}
+
 				resChan <- userMs
 			}
-			log.Printf("BatchFetchByUserIDs worker %v exit", workerID)
 		}(i)
 	}
 
