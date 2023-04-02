@@ -88,10 +88,3 @@ func (u *UserHandler) Login(c *gin.Context) {
 		"user_id":    strconv.FormatInt(userBasic.UserID, 10),
 	})
 }
-
-// func (u *UserHandler) GetUserInfo(c *gin.Context) {
-//     userID := c.Query("user_id")
-//     if userID == "" {
-//         // TODO
-//     }
-// }

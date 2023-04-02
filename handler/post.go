@@ -37,7 +37,9 @@ func (p *PostHandler) Create(c *gin.Context) {
 		c.Error(myerr.ErrNotLogin) // nolint:errcheck
 		return
 	}
-	if conf.Global.App.CheckUserIsAuthor && userID != req.AuthorID {
+	if req.AuthorID == 0 {
+		req.AuthorID = userID
+	} else if conf.Global.App.CheckUserIsAuthor && userID != req.AuthorID {
 		c.Error(myerr.ErrAuth.WithEmsg("无操作权限")) // nolint:errcheck
 	}
 
@@ -61,7 +63,9 @@ func (p *PostHandler) Reply(c *gin.Context) {
 		c.Error(myerr.ErrNotLogin) // nolint:errcheck
 		return
 	}
-	if conf.Global.App.CheckUserIsAuthor && userID != req.AuthorID {
+	if req.AuthorID == 0 {
+		req.AuthorID = userID
+	} else if conf.Global.App.CheckUserIsAuthor && userID != req.AuthorID {
 		c.Error(myerr.ErrAuth.WithEmsg("无操作权限")) // nolint:errcheck
 	}
 

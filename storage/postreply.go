@@ -34,7 +34,7 @@ func (p *PostReplyStorageMySQL) Create(ctx context.Context, reply *model.PostRep
 // List implements PostReplyStorage
 func (p *PostReplyStorageMySQL) List(ctx context.Context, postID int64, order string, cursor string, cnt int) (list []*model.PostReply, newCursor string, err error) {
 	cnt = funcs.Clip(cnt, 1, conf.Global.App.MaxPageSize)
-	lastID, lastTime, err := decomposePageCursor(cursor)
+	lastID, lastTime, err := DecomposePageCursor(cursor)
 	if err != nil {
 		return nil, "", errors.Wrapf(err, "wrong cursor: %v", cursor)
 	}
@@ -60,6 +60,6 @@ func (p *PostReplyStorageMySQL) List(ctx context.Context, postID int64, order st
 	}
 
 	n := len(list)
-	newCursor = composePageCursor(list[n-1].ReplyID, list[n-1].CreatedAt)
+	newCursor = ComposePageCursor(list[n-1].ReplyID, list[n-1].CreatedAt)
 	return list, newCursor, nil
 }

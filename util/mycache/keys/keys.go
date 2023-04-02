@@ -56,10 +56,6 @@ func PostReplyTime(postID int64) string {
 	return Key("post", postID, "reply_time")
 }
 
-func PostLatestCreated() string {
-	return Key("post", "latest_created")
-}
-
-func PostLatestReplied() string {
-	return Key("post", "latest_replied")
+func PostListName(order string) string {
+	return Key("post", "post_list_order_by_"+order)
 }

@@ -39,11 +39,13 @@ func readConfig() conf.Config {
 	}
 	config := conf.FromYAML(r)
 	conf.Global = &config
-	fmt.Printf("config: %#v\n", config)
+	fmt.Printf("app config: %#v\n", config.App)
 	return config
 }
 
 func startApp(config conf.Config) {
+	log.Println("starting app...")
+
 	idgen.Init("2020-01-01", 0)
 
 	db := initDB(config)
@@ -56,7 +58,14 @@ func startApp(config conf.Config) {
 	r := gin.Default()
 	r.ContextWithFallback = true
 	// pprof.Register(r)
-	r.Use(cors.Default())
+	r.Use(cors.New(cors.Config{
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Auth"},
+		AllowCredentials: false,
+		AllowAllOrigins:  true,
+		MaxAge:           12 * time.Hour,
+	}))
+	// r.Use(cors.Default())
 	api := r.Group("/api")
 	api.Use(
 		middleware.ErrorHandler(),
@@ -108,6 +117,7 @@ func startApp(config conf.Config) {
 	}
 	postHandler.AddRoute(api.Group("/post"))
 
+	log.Println("start success.")
 	err := r.Run(fmt.Sprintf(":%v", config.App.Port))
 	if err != nil {
 		log.Fatalf("app exit with err: %v\n", err)

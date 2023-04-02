@@ -77,6 +77,7 @@ def makePosts(users):
         for i in range(N_POST_PER_USER):
             p = {"author_id": authorID, "title": f"title{i}{authorID}", "content": f"content{i}{authorID}"}
             res = post('/post/create', p, user['auth_token'])
+            # time.sleep(0.1) # to make sure the order is same
             assertOK(res)
             p["post_id"] = res.json()["post_id"]
             postList.append(p)
@@ -98,23 +99,38 @@ def replyPost(postID, users):
 def main():
     users = registerUsers(N_USER)
     postList = makePosts(users)
+    # print('expect postIDs', [p['post_id'] for p in postList])
+    # print('expect postIDs number', len(postList))
 
     # query posts according create_time
     expectGen = (p for p in postList[::-1])
     progress = tqdm.trange(len(postList), desc="check post")
     expectCnt = len(postList)
     cursor = ""
+    gotPostList = []
     while expectCnt > 0:
         res = get('/post/list', {"order": "create_time", "cursor": cursor})
         assertOK(res)
         cursor, page = res.json()["cursor"], res.json()["list"]
         for realR in page:
             expectCnt -= 1
-            assert expectCnt >= 0
+            # assert expectCnt >= 0
             progress.update(1)
-            expectR = next(expectGen)
-            for field in ["post_id", "author_id", "title", "content"]:
-                assert realR[field] == expectR[field], f"expect {expectR}, got {realR}"
+            # expectR = next(expectGen)
+        gotPostList.extend(page)
+    # print('got postIDs', [p['post_id'] for p in gotPostList])
+    # print('got postIDs number', len(gotPostList))
+    assert len(postList) == len(gotPostList)
+    # for expectR, realR in zip(postList, gotPostList):
+    #     for field in ["post_id", "author_id", "title", "content"]:
+    #         assert realR[field] == expectR[field], f"expect {expectR}, got {realR}"
+    wrongPost = 0
+    for expectR, realR in zip(postList[::-1], gotPostList):
+        for field in ["post_id", "author_id", "title", "content"]:
+            if realR[field] != expectR[field]:
+                wrongPost += 1
+    assert wrongPost == 0
+    # print("Wrong post", wrongPost)  
 
     # reply a post
     postID = postList[0]["post_id"]

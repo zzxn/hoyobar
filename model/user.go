@@ -22,10 +22,14 @@ func (User) TableName() string {
 	return "user"
 }
 
-func TableOfUser(user *User, userID int64) func(db *gorm.DB) *gorm.DB {
+func TableOfUser(userID int64) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		shardIdx := myhash.HashSnowflakeID(userID, int64(conf.Global.Sharding.UserShardN))
-		tableName := user.TableName() + strconv.FormatInt(shardIdx, 10)
-		return db.Table(tableName)
+		return db.Table(TableNameOfUser(userID))
 	}
+}
+
+func TableNameOfUser(userID int64) string {
+	shardIdx := myhash.HashSnowflakeID(userID, int64(conf.Global.Sharding.UserShardN))
+	tableName := User{}.TableName() + strconv.FormatInt(shardIdx, 10)
+	return tableName
 }

@@ -285,32 +285,28 @@ func (u *UserService) Login(ctx context.Context, username, password string) (*Us
 
 	userID, err := u.UsernameToUserID(ctx, username)
 	if err != nil {
-		return nil, myerr.OtherErrWarpf(err, "fails to query username %v", username)
+		return nil, err
 	}
 	if userID == 0 {
 		return nil, myerr.ErrUserNotFound
 	}
 
-	var userBasic *UserBasic
-	userBasic = u.readCacheUserBasic(ctx, userID)
-	if userBasic == nil {
-		userModel, err := u.userStorage.FetchByUserID(ctx, userID)
-		if err != nil {
-			return nil, myerr.OtherErrWarpf(err, "fail to find user")
-		}
-		if userModel == nil {
-			return nil, myerr.ErrOther.WithEmsg("未找到用户数据，请联系客服")
-		}
+	userModel, err := u.userStorage.FetchByUserID(ctx, userID)
+	if err != nil {
+		return nil, myerr.OtherErrWarpf(err, "fail to find user")
+	}
+	if userModel == nil {
+		return nil, myerr.ErrOther.WithEmsg("未找到用户数据，请联系客服")
+	}
 
-		if !myhash.CompareHashAndPassword(userModel.Password, password) {
-			return nil, myerr.ErrWrongPassword
-		}
-		userBasic = &UserBasic{
-			UserID:   userModel.UserID,
-			Phone:    userModel.Phone.String,
-			Email:    userModel.Email.String,
-			Nickname: userModel.Nickname,
-		}
+	if !myhash.CompareHashAndPassword(userModel.Password, password) {
+		return nil, myerr.ErrWrongPassword
+	}
+	userBasic := &UserBasic{
+		UserID:   userModel.UserID,
+		Phone:    userModel.Phone.String,
+		Email:    userModel.Email.String,
+		Nickname: userModel.Nickname,
 	}
 	authToken, err := u.genAndStoreAuthToken(ctx, userBasic.UserID)
 	if err != nil {

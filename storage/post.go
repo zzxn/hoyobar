@@ -43,6 +43,42 @@ func (p *PostStorageMySQL) FetchByPostID(ctx context.Context, postID int64) (*mo
 	return &postM, nil
 }
 
+// BatchFetchByPostIDs implements PostStorage
+func (p *PostStorageMySQL) BatchFetchByPostIDs(ctx context.Context, postIDs []int64) ([]*model.Post, error) {
+	postIDToIndices := make(map[int64][]int)
+	for i, v := range postIDs {
+		postIDToIndices[v] = append(postIDToIndices[v], i)
+	}
+
+	postSet := make([]*model.Post, 0, len(postIDs))
+	err := p.db.Model(&model.Post{}).Where("post_id in ?", postIDs).Find(&postSet).Error
+	if err != nil {
+		return nil, errors.Wrapf(err, "fail to batch query posts with %v", postIDs)
+	}
+
+	list := make([]*model.Post, len(postIDs))
+	for _, post := range postSet {
+		for _, idx := range postIDToIndices[post.PostID] {
+			list[idx] = &model.Post{
+				Model: model.Model{
+					ID:        post.ID,
+					CreatedAt: post.CreatedAt,
+					UpdatedAt: post.UpdatedAt,
+					DeletedAt: post.DeletedAt,
+				},
+				PostID:    post.PostID,
+				CreatedAt: post.CreatedAt,
+				ReplyTime: post.ReplyTime,
+				ReplyNum:  post.ReplyNum,
+				AuthorID:  post.AuthorID,
+				Title:     post.Title,
+				Content:   post.Content,
+			}
+		}
+	}
+	return list, nil
+}
+
 // HasPost implements PostStorage
 func (p *PostStorageMySQL) HasPost(ctx context.Context, postID int64) (bool, error) {
 	var count int64
@@ -57,7 +93,7 @@ func (p *PostStorageMySQL) HasPost(ctx context.Context, postID int64) (bool, err
 // List implements PostStorage
 func (p *PostStorageMySQL) List(ctx context.Context, order string, cursor string, cnt int) (list []*model.Post, newCursor string, err error) {
 	cnt = funcs.Clip(cnt, 1, conf.Global.App.MaxPageSize)
-	lastID, lastTime, err := decomposePageCursor(cursor)
+	lastID, lastTime, err := DecomposePageCursor(cursor)
 	if err != nil {
 		return nil, "", errors.Wrapf(err, "wrong cursor: %v", cursor)
 	}
@@ -89,9 +125,9 @@ func (p *PostStorageMySQL) List(ctx context.Context, order string, cursor string
 	n := len(list)
 	switch order {
 	case PostOrderCreateTimeDesc:
-		newCursor = composePageCursor(list[n-1].PostID, list[n-1].CreatedAt)
+		newCursor = ComposePageCursor(list[n-1].PostID, list[n-1].CreatedAt)
 	case PostOrderReplyTimeDesc:
-		newCursor = composePageCursor(list[n-1].PostID, list[n-1].ReplyTime)
+		newCursor = ComposePageCursor(list[n-1].PostID, list[n-1].ReplyTime)
 	default:
 		return nil, "", errors.Errorf("unsupported post list order (2): %v", order)
 	}
@@ -99,12 +135,13 @@ func (p *PostStorageMySQL) List(ctx context.Context, order string, cursor string
 }
 
 // IncrementReplyNum implements PostStorage
-func (p *PostStorageMySQL) IncrementReplyNum(ctx context.Context, postID int64, incr int) error {
-	now := time.Now()
+func (p *PostStorageMySQL) IncrementReplyNum(
+	ctx context.Context, postID int64, incr int, replyTime time.Time,
+) error {
 	err := p.db.Model(&model.Post{}).Where("post_id = ?", postID).
 		Updates(map[string]interface{}{
-			"reply_time": now,
-			"updated_at": now,
+			"reply_time": replyTime,
+			"updated_at": replyTime,
 			"reply_num":  gorm.Expr("reply_num + ?", incr),
 		}).Error
 	return errors.Wrapf(err, "fails to increment reply num")
